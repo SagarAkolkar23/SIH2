@@ -1,6 +1,7 @@
 // src/components/dashboard/IndustrialStatusPanel.js
 import React from "react";
 import { View, Text } from "react-native";
+import { useThemeStore } from "../../../store/themeStore";
 
 const IndustrialStatusPanel = ({
   label,
@@ -8,36 +9,20 @@ const IndustrialStatusPanel = ({
   icon: Icon,
   severity = "ok",
 }) => {
-  const colors = {
-    ok: {
-      bg: "#134e4a",
-      border: "#14b8a6",
-      text: "#5eead4",
-      led: "#14b8a6",
-      label: "#e5e7eb",
-    },
-    warning: {
-      bg: "#713f12",
-      border: "#f59e0b",
-      text: "#fde047",
-      led: "#f59e0b",
-      label: "#e5e7eb",
-    },
-    critical: {
-      bg: "#7f1d1d",
-      border: "#ef4444",
-      text: "#fca5a5",
-      led: "#ef4444",
-      label: "#e5e7eb",
-    },
+  const { colors } = useThemeStore();
+
+  const statusColors = {
+    ok: colors.statusOk,
+    warning: colors.statusWarning,
+    critical: colors.statusCritical,
   };
 
-  const c = colors[severity] || colors.ok;
+  const c = statusColors[severity] || statusColors.ok;
 
   return (
     <View
       style={{
-        backgroundColor: "#1a1a1a",
+        backgroundColor: colors.surface,
         borderLeftWidth: 5,
         borderLeftColor: c.border,
         borderRadius: 10,
@@ -47,7 +32,7 @@ const IndustrialStatusPanel = ({
         alignItems: "center",
         justifyContent: "space-between",
         borderWidth: 1,
-        borderColor: "#333",
+        borderColor: colors.border,
       }}
     >
       {/* Left Side: Icon and Info */}
@@ -75,7 +60,7 @@ const IndustrialStatusPanel = ({
         <View style={{ flex: 1 }}>
           <Text
             style={{
-              color: c.label,
+              color: colors.textPrimary,
               fontSize: 12,
               fontWeight: "600",
               marginBottom: 2,
@@ -115,7 +100,7 @@ const IndustrialStatusPanel = ({
         />
         <Text
           style={{
-            color: "#6b7280",
+            color: colors.textTertiary,
             fontSize: 9,
             marginTop: 4,
             textTransform: "uppercase",

@@ -15,12 +15,12 @@ import {
   BatteryCharging,
   Sun,
 } from "lucide-react-native";
-import TopAppBar from "../components/TopAppBar";
-import FilterModal from "../components/history/FilterModal";
-import FilterSummaryCard from "../components/history/FilterSummaryCard";
-import ActionButtonsRow from "../components/history/ActionButtonsRow";
-import HistoryChartCard from "../components/history/HistoryChartCard";
-import DownloadButton from "../components/history/DownloadButton";
+import TopAppBar from "../../components/controller/TopAppBar";
+import FilterModal from "../../components/controller/history/FilterModal";
+import FilterSummaryCard from "../../components/controller/history/FilterSummaryCard";
+import ActionButtonsRow from "../../components/controller/history/ActionButtonsRow";
+import HistoryChartCard from "../../components/controller/history/HistoryChartCard";
+import DownloadButton from "../../components/controller/history/DownloadButton";
 
 // Generate mock historical data
 const generateHistoricalData = () => {

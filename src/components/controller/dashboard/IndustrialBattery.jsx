@@ -1,15 +1,17 @@
 import React from "react";
 import { View, Text, Platform } from "react-native";
 import { BatteryCharging, AlertTriangle } from "lucide-react-native";
+import { useThemeStore } from "../../../store/themeStore";
 
 const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
+  const { colors } = useThemeStore();
   const isLow = percentage <= 20;
   const isCritical = percentage <= 10;
 
   const segments = 10;
   const filledSegments = Math.ceil((percentage / 100) * segments);
 
-  const statusColor = isCritical ? "#ef4444" : isLow ? "#f59e0b" : "#22c55e";
+  const statusColor = isCritical ? colors.error : isLow ? colors.warning : colors.success;
 
   const statusText = (() => {
     if (isCritical) return "CRITICAL";
@@ -21,11 +23,11 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
   return (
     <View
       style={{
-        backgroundColor: "#1a1a1a",
+        backgroundColor: colors.surface,
         borderRadius: 20,
         padding: 16,
         borderWidth: 2,
-        borderColor: "#333",
+        borderColor: colors.border,
         marginBottom: 16,
       }}
     >
@@ -48,7 +50,7 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
         )}
         <Text
           style={{
-            color: "#e5e7eb",
+            color: colors.textPrimary,
             fontSize: 13,
             fontWeight: "700",
             letterSpacing: 0.5,
@@ -63,11 +65,11 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
       <View
         style={{
           alignItems: "center",
-          backgroundColor: "#0a0a0a",
+          backgroundColor: colors.surfaceSecondary,
           borderRadius: 16,
           padding: 20,
           borderWidth: 2,
-          borderColor: "#2a2a2a",
+          borderColor: colors.borderLight,
           marginBottom: 16,
         }}
       >
@@ -85,17 +87,17 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
               width: 220,
               height: 90,
               borderWidth: 4,
-              borderColor: "#666",
+              borderColor: colors.borderDark,
               borderRadius: 10,
               padding: 8,
-              backgroundColor: "#0a0a0a",
+              backgroundColor: colors.surfaceSecondary,
             }}
           >
             {/* Battery Segments */}
             <View style={{ flexDirection: "row", height: "100%", gap: 3 }}>
               {Array.from({ length: segments }).map((_, i) => {
                 const isFilled = i < filledSegments;
-                const segmentColor = isFilled ? statusColor : "#1a1a1a";
+                const segmentColor = isFilled ? statusColor : colors.surface;
                 const opacity = isFilled ? 0.5 + (i / segments) * 0.5 : 1;
 
                 return (
@@ -107,7 +109,7 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
                       borderRadius: 3,
                       opacity: opacity,
                       borderWidth: 1,
-                      borderColor: "#333",
+                      borderColor: colors.border,
                     }}
                   />
                 );
@@ -120,7 +122,7 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
             style={{
               width: 10,
               height: 36,
-              backgroundColor: "#666",
+              backgroundColor: colors.borderDark,
               borderTopRightRadius: 6,
               borderBottomRightRadius: 6,
               marginLeft: -2,
@@ -131,7 +133,7 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
         {/* Large Percentage Display */}
         <View
           style={{
-            backgroundColor: "#000",
+            backgroundColor: colors.surfaceTertiary,
             borderRadius: 10,
             paddingVertical: 8,
             paddingHorizontal: 28,
@@ -156,11 +158,11 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
       {/* Status Information Panel */}
       <View
         style={{
-          backgroundColor: "#0a0a0a",
+          backgroundColor: colors.surfaceSecondary,
           borderRadius: 10,
           padding: 14,
           borderWidth: 1,
-          borderColor: "#333",
+          borderColor: colors.border,
         }}
       >
         {/* Status Row */}
@@ -172,11 +174,11 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
             marginBottom: 10,
             paddingBottom: 10,
             borderBottomWidth: 1,
-            borderBottomColor: "#1a1a1a",
+            borderBottomColor: colors.border,
           }}
         >
           <View>
-            <Text style={{ color: "#6b7280", fontSize: 10, letterSpacing: 1 }}>
+            <Text style={{ color: colors.textTertiary, fontSize: 10, letterSpacing: 1 }}>
               STATUS
             </Text>
             <Text
@@ -215,11 +217,11 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
             alignItems: "center",
           }}
         >
-          <Text style={{ color: "#6b7280", fontSize: 11 }}>POWER FLOW</Text>
+          <Text style={{ color: colors.textTertiary, fontSize: 11 }}>POWER FLOW</Text>
           <View style={{ flexDirection: "row", alignItems: "baseline" }}>
             <Text
               style={{
-                color: "#e5e7eb",
+                color: colors.textPrimary,
                 fontSize: 20,
                 fontWeight: "700",
                 fontFamily: Platform.OS === "ios" ? "Courier New" : "monospace",
@@ -228,7 +230,7 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
               {isCharging ? "+" : "-"}
               {powerKW.toFixed(2)}
             </Text>
-            <Text style={{ color: "#9ca3af", fontSize: 12, marginLeft: 4 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 4 }}>
               kW
             </Text>
           </View>
@@ -237,7 +239,7 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
         {/* Additional Info */}
         <Text
           style={{
-            color: "#6b7280",
+            color: colors.textTertiary,
             fontSize: 10,
             marginTop: 8,
             textAlign: "center",
@@ -256,16 +258,16 @@ const IndustrialBattery = ({ percentage, isCharging, powerKW = 0 }) => {
         <View
           style={{
             marginTop: 12,
-            backgroundColor: isCritical ? "#450a0a" : "#451a03",
+            backgroundColor: isCritical ? colors.statusCriticalBg : colors.statusWarningBg,
             borderRadius: 8,
             padding: 10,
             borderWidth: 1,
-            borderColor: isCritical ? "#7f1d1d" : "#78350f",
+            borderColor: isCritical ? colors.statusCritical.border : colors.statusWarning.border,
           }}
         >
           <Text
             style={{
-              color: isCritical ? "#fca5a5" : "#fde047",
+              color: isCritical ? colors.statusCritical.text : colors.statusWarning.text,
               fontSize: 11,
               fontWeight: "600",
               textAlign: "center",

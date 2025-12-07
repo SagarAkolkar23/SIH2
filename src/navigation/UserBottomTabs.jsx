@@ -1,15 +1,15 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import Dashboard from "../screens/controller/dashboard.jsx";
-import History from "../screens/controller/history.jsx";
-import Notifications from "../screens/controller/notifications.jsx";
-import Alert from "../screens/controller/alert.jsx";
+import UserDashboard from "../screens/users/dashboard";
+import UserHistory from "../screens/users/history";
+import UserAlerts from "../screens/users/alerts";
+import UserNotifications from "../screens/users/notifications";
 import { Home, BarChart2, Bell, AlertTriangle } from "lucide-react-native";
 import { useThemeStore } from "../store/themeStore";
 
 const Tab = createBottomTabNavigator();
 
-export default function ControllerBottomTabs() {
+export default function UserBottomTabs() {
   const { colors } = useThemeStore();
 
   return (
@@ -27,13 +27,13 @@ export default function ControllerBottomTabs() {
         tabBarIcon: ({ focused, color }) => {
           const size = focused ? 26 : 22;
 
-          if (route.name === "Dashboard")
+          if (route.name === "UserDashboard")
             return <Home size={size} color={color} />;
-          if (route.name === "History")
+          if (route.name === "UserHistory")
             return <BarChart2 size={size} color={color} />;
-          if (route.name === "Notifications")
+          if (route.name === "UserNotifications")
             return <Bell size={size} color={color} />;
-          if (route.name === "Alerts")
+          if (route.name === "UserAlerts")
             return <AlertTriangle size={size} color={color} />;
         },
         tabBarLabelStyle: {
@@ -43,10 +43,26 @@ export default function ControllerBottomTabs() {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={Dashboard} />
-      <Tab.Screen name="History" component={History} />
-      <Tab.Screen name="Notifications" component={Notifications} />
-      <Tab.Screen name="Alerts" component={Alert} />
+      <Tab.Screen 
+        name="UserDashboard" 
+        component={UserDashboard}
+        options={{ tabBarLabel: "Dashboard" }}
+      />
+      <Tab.Screen 
+        name="UserHistory" 
+        component={UserHistory}
+        options={{ tabBarLabel: "History" }}
+      />
+      <Tab.Screen 
+        name="UserNotifications" 
+        component={UserNotifications}
+        options={{ tabBarLabel: "Notifications" }}
+      />
+      <Tab.Screen 
+        name="UserAlerts" 
+        component={UserAlerts}
+        options={{ tabBarLabel: "Alerts" }}
+      />
     </Tab.Navigator>
   );
 }

@@ -1,4 +1,3 @@
-// src/components/common/TopAppBar.js
 import React from "react";
 import {
   View,
@@ -7,36 +6,38 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-import { Menu, Bell, Settings, Power } from "lucide-react-native";
+import { Menu, Bell, User, Settings } from "lucide-react-native";
+import { useThemeStore } from "../../store/themeStore";
+import { useAuthStore } from "../../store/authStore";
 
-const TopAppBar = ({
-  title = "Solar Controller",
+const UserTopAppBar = ({
+  title = "Microgrid",
   onMenuPress,
   onNotificationPress,
+  onProfilePress,
   onSettingsPress,
   showNotifications = true,
+  showProfile = true,
   showSettings = true,
   showMenu = true,
-  systemStatus = "OPERATIONAL",
   notificationCount = 0,
 }) => {
-  const statusColor =
-    systemStatus === "OPERATIONAL"
-      ? "#22c55e"
-      : systemStatus === "LOW BATTERY"
-      ? "#f59e0b"
-      : "#ef4444";
+  const { colors, theme } = useThemeStore();
+  const user = useAuthStore((state) => state.user);
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0a0a" />
+      <StatusBar 
+        barStyle={theme === "dark" ? "light-content" : "dark-content"} 
+        backgroundColor={colors.background} 
+      />
       <View
         style={{
-          backgroundColor: "#1a1a1a",
+          backgroundColor: colors.surface,
           paddingTop:
             Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0,
           borderBottomWidth: 2,
-          borderBottomColor: "#333",
+          borderBottomColor: colors.border,
         }}
       >
         <View
@@ -56,22 +57,22 @@ const TopAppBar = ({
                 style={{
                   padding: 8,
                   marginRight: 12,
-                  backgroundColor: "#0a0a0a",
+                  backgroundColor: colors.surfaceSecondary,
                   borderRadius: 8,
                   borderWidth: 1,
-                  borderColor: "#333",
+                  borderColor: colors.border,
                 }}
                 activeOpacity={0.7}
               >
-                <Menu size={20} color="#e5e7eb" />
+                <Menu size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             )}
 
-            {/* Title and Status */}
+            {/* Title and User Info */}
             <View style={{ flex: 1 }}>
               <Text
                 style={{
-                  color: "#e5e7eb",
+                  color: colors.textPrimary,
                   fontSize: 18,
                   fontWeight: "800",
                   letterSpacing: 0.5,
@@ -88,28 +89,22 @@ const TopAppBar = ({
               >
                 <View
                   style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: statusColor,
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: colors.success,
                     marginRight: 6,
-                    shadowColor: statusColor,
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 1,
-                    shadowRadius: 4,
-                    elevation: 4,
                   }}
                 />
                 <Text
                   style={{
-                    color: statusColor,
+                    color: colors.textSecondary,
                     fontSize: 10,
-                    fontWeight: "700",
-                    textTransform: "uppercase",
-                    letterSpacing: 0.5,
+                    fontWeight: "600",
+                    textTransform: "capitalize",
                   }}
                 >
-                  {systemStatus}
+                  {user?.username || user?.email || "User"}
                 </Text>
               </View>
             </View>
@@ -123,22 +118,22 @@ const TopAppBar = ({
                 onPress={onNotificationPress}
                 style={{
                   padding: 8,
-                  backgroundColor: "#0a0a0a",
+                  backgroundColor: colors.surfaceSecondary,
                   borderRadius: 8,
                   borderWidth: 1,
-                  borderColor: "#333",
+                  borderColor: colors.border,
                   position: "relative",
                 }}
                 activeOpacity={0.7}
               >
-                <Bell size={20} color="#e5e7eb" />
+                <Bell size={20} color={colors.textPrimary} />
                 {notificationCount > 0 && (
                   <View
                     style={{
                       position: "absolute",
                       top: 4,
                       right: 4,
-                      backgroundColor: "#ef4444",
+                      backgroundColor: colors.error,
                       borderRadius: 8,
                       minWidth: 16,
                       height: 16,
@@ -146,7 +141,7 @@ const TopAppBar = ({
                       justifyContent: "center",
                       paddingHorizontal: 4,
                       borderWidth: 2,
-                      borderColor: "#1a1a1a",
+                      borderColor: colors.surface,
                     }}
                   >
                     <Text
@@ -163,20 +158,37 @@ const TopAppBar = ({
               </TouchableOpacity>
             )}
 
+            {/* Profile */}
+            {showProfile && (
+              <TouchableOpacity
+                onPress={onProfilePress}
+                style={{
+                  padding: 8,
+                  backgroundColor: colors.surfaceSecondary,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                activeOpacity={0.7}
+              >
+                <User size={20} color={colors.textPrimary} />
+              </TouchableOpacity>
+            )}
+
             {/* Settings */}
             {showSettings && (
               <TouchableOpacity
                 onPress={onSettingsPress}
                 style={{
                   padding: 8,
-                  backgroundColor: "#0a0a0a",
+                  backgroundColor: colors.surfaceSecondary,
                   borderRadius: 8,
                   borderWidth: 1,
-                  borderColor: "#333",
+                  borderColor: colors.border,
                 }}
                 activeOpacity={0.7}
               >
-                <Settings size={20} color="#e5e7eb" />
+                <Settings size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             )}
           </View>
@@ -186,4 +198,4 @@ const TopAppBar = ({
   );
 };
 
-export default TopAppBar;
+export default UserTopAppBar;

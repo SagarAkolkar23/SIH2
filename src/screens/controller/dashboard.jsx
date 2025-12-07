@@ -1,6 +1,6 @@
 // src/screens/Dashboard.js
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, SafeAreaView, Platform } from "react-native";
+import { View, Text, ScrollView, SafeAreaView, Platform, TouchableOpacity } from "react-native";
 import {
   Zap,
   Activity,
@@ -9,29 +9,66 @@ import {
   Power,
   AlertTriangle,
 } from "lucide-react-native";
-import IndustrialGauge from "../components/dashboard/industrialGauge";
-import IndustrialBattery from "../components/dashboard/IndustrialBattery";
-import IndustrialStatusPanel from "../components/dashboard/IndustrialStatusPanel";
-import TopAppBar from "../components/TopAppBar";
+import IndustrialGauge from "../../components/controller/dashboard/industrialGauge";
+import IndustrialBattery from "../../components/controller/dashboard/IndustrialBattery";
+import IndustrialStatusPanel from "../../components/controller/dashboard/IndustrialStatusPanel";
+import TopAppBar from "../../components/controller/TopAppBar";
+import { useThemeStore } from "../../store/themeStore";
+import ProfileModal from "../../components/users/ProfileModal";
+import RegistrationModal from "../../components/controller/RegistrationModal";
+import { useSolarReadings } from "../../service/controller/testGen";
+import { useFocusEffect } from "@react-navigation/native";
+import WeatherWidget from "../../components/controller/dashboard/WeatherWidget";
 
 export default function Dashboard() {
+  const { colors } = useThemeStore();
   const [data, setData] = useState({
     voltage: 230,
     current: 11.8,
     battery: 62,
     temp: 41,
-    solarInput: 2650, // watts
+    solarInput: 2650,
     lastUpdated: new Date(),
   });
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [registrationModalVisible, setRegistrationModalVisible] = useState(false);
+  const [isWeatherExpanded, setIsWeatherExpanded] = useState(false);
+  
+  const handleWeatherToggle = () => {
+    setIsWeatherExpanded(!isWeatherExpanded);
+  };
+
+  // Reset weather expansion state when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Collapse weather widget when navigating back to dashboard
+      setIsWeatherExpanded(false);
+    }, [])
+  );
+
+  const { data: solarReadings, isLoading, isError } = useSolarReadings(true);
+  const latestReading = solarReadings?.[0]?.voltage ?? 0;
+
+const panelRatedPower = 10; // watts
+
+// Derived current from real voltage reading
+const calculatedCurrent =
+  latestReading > 0 ? panelRatedPower / latestReading : 0;
+
+// Add tiny randomness to simulate MPPT variation
+const simulatedCurrent = Number(
+  (calculatedCurrent * (0.95 + Math.random() * 0.1)).toFixed(2)
+);
+
 
   // Simulated live data updates
   useEffect(() => {
     const interval = setInterval(() => {
       setData((prev) => ({
-        voltage: 220 + Math.floor(Math.random() * 25), // 220–245 V
-        current: 8 + Math.random() * 7, // 8–15 A
-        battery: Math.min(prev.battery + 0.1, 100), // slowly charging
-        temp: 36 + Math.floor(Math.random() * 10), // 36–45 °C
+        voltage: 220 + Math.floor(Math.random() * 25),
+        current: 8 + Math.random() * 7,
+        battery: Math.min(prev.battery + 0.1, 100),
+        temp: 36 + Math.floor(Math.random() * 10),
         solarInput: 2400 + Math.floor(Math.random() * 250),
         lastUpdated: new Date(),
       }));
@@ -41,6 +78,7 @@ export default function Dashboard() {
   }, []);
 
   const powerKW = (data.voltage * data.current) / 1000;
+  
 
   // System status logic
   const systemStatus = (() => {
@@ -51,36 +89,33 @@ export default function Dashboard() {
   })();
 
   const systemStatusColor = (() => {
-    if (systemStatus === "OPERATIONAL") return "#22c55e";
-    if (systemStatus === "LOW BATTERY") return "#f59e0b";
-    return "#ef4444";
+    if (systemStatus === "OPERATIONAL") return colors.success;
+    if (systemStatus === "LOW BATTERY") return colors.warning;
+    return colors.error;
   })();
 
   const handleMenuPress = () => {
-    console.log("Menu Pressed");
-    // TODO: open drawer navigation later
+    // Menu handler
   };
 
-  const handleNotificationPress = () => {
-    console.log("Notifications Clicked");
-    // TODO: navigate to notifications screen
+  const handleRegisterPress = () => {
+    setRegistrationModalVisible(true);
   };
 
-  const handleSettingsPress = () => {
-    console.log("Settings Clicked");
-    // TODO: navigate to settings screen
+  const handleProfilePress = () => {
+    setProfileModalVisible(true);
   };
-
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0a" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar
         title="VeerGrid"
         systemStatus={systemStatus}
         onMenuPress={handleMenuPress}
-        onNotificationPress={handleNotificationPress}
-        onSettingsPress={handleSettingsPress}
-        notificationCount={systemStatus !== "OPERATIONAL" ? 1 : 0}
+        onRegisterPress={handleRegisterPress}
+        onWeatherPress={handleWeatherToggle}
+        onProfilePress={handleProfilePress}
+        isWeatherExpanded={isWeatherExpanded}
       />
       <ScrollView
         style={{ flex: 1 }}
@@ -90,15 +125,21 @@ export default function Dashboard() {
           paddingBottom: 32,
         }}
       >
+        {/* Weather Widget */}
+        <WeatherWidget 
+          isExpanded={isWeatherExpanded}
+          onToggleExpand={handleWeatherToggle}
+        />
+
         {/* Header Panel */}
         <View
           style={{
-            backgroundColor: "#1a1a1a",
+            backgroundColor: colors.surface,
             borderRadius: 16,
             padding: 18,
             marginBottom: 20,
             borderWidth: 2,
-            borderColor: "#333",
+            borderColor: colors.border,
           }}
         >
           <View
@@ -118,7 +159,7 @@ export default function Dashboard() {
                 />
                 <Text
                   style={{
-                    color: "#9ca3af",
+                    color: colors.textSecondary,
                     fontSize: 10,
                     letterSpacing: 1.5,
                     textTransform: "uppercase",
@@ -140,7 +181,13 @@ export default function Dashboard() {
               >
                 {systemStatus}
               </Text>
-              <Text style={{ color: "#6b7280", fontSize: 10, marginTop: 4 }}>
+              <Text
+                style={{
+                  color: colors.textTertiary,
+                  fontSize: 10,
+                  marginTop: 4,
+                }}
+              >
                 Last update: {data.lastUpdated.toLocaleTimeString()}
               </Text>
             </View>
@@ -149,16 +196,16 @@ export default function Dashboard() {
             <View
               style={{
                 alignItems: "flex-end",
-                backgroundColor: "#0a0a0a",
+                backgroundColor: colors.surfaceSecondary,
                 padding: 12,
                 borderRadius: 10,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: colors.border,
               }}
             >
               <Text
                 style={{
-                  color: "#9ca3af",
+                  color: colors.textSecondary,
                   fontSize: 10,
                   letterSpacing: 1,
                   marginBottom: 4,
@@ -169,12 +216,12 @@ export default function Dashboard() {
               <View style={{ flexDirection: "row", alignItems: "baseline" }}>
                 <Text
                   style={{
-                    color: "#fbbf24",
+                    color: colors.accent,
                     fontSize: 28,
                     fontWeight: "800",
                     fontFamily:
                       Platform.OS === "ios" ? "Courier New" : "monospace",
-                    textShadowColor: "#fbbf24",
+                    textShadowColor: colors.accent,
                     textShadowOffset: { width: 0, height: 0 },
                     textShadowRadius: 8,
                   }}
@@ -183,7 +230,7 @@ export default function Dashboard() {
                 </Text>
                 <Text
                   style={{
-                    color: "#f59e0b",
+                    color: colors.accentSecondary,
                     fontSize: 14,
                     fontWeight: "600",
                     marginLeft: 4,
@@ -199,8 +246,12 @@ export default function Dashboard() {
                   marginTop: 6,
                 }}
               >
-                <Sun size={12} color="#fbbf24" style={{ marginRight: 4 }} />
-                <Text style={{ color: "#9ca3af", fontSize: 10 }}>
+                <Sun
+                  size={12}
+                  color={colors.accent}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={{ color: colors.textSecondary, fontSize: 10 }}>
                   Solar: {(data.solarInput / 1000).toFixed(2)} kW
                 </Text>
               </View>
@@ -214,7 +265,7 @@ export default function Dashboard() {
                 marginTop: 12,
                 paddingTop: 12,
                 borderTopWidth: 1,
-                borderTopColor: "#333",
+                borderTopColor: colors.border,
                 flexDirection: "row",
                 alignItems: "center",
               }}
@@ -245,7 +296,7 @@ export default function Dashboard() {
         {/* Section Header */}
         <Text
           style={{
-            color: "#6b7280",
+            color: colors.textTertiary,
             fontSize: 11,
             fontWeight: "700",
             letterSpacing: 1.5,
@@ -257,35 +308,46 @@ export default function Dashboard() {
         </Text>
 
         {/* Voltage Gauge */}
-        <IndustrialGauge
-          value={data.voltage}
-          max={260}
-          label="Grid Voltage"
-          unit="V"
-          icon={Zap}
-          lowWarning={200}
-          highWarning={250}
-          greenZoneStart={220}
-          greenZoneEnd={240}
-        />
+        {/* Voltage Gauge Live From Backend */}
+        {isLoading ? (
+          <Text style={{ color: colors.textSecondary, marginBottom: 20 }}>
+            Loading live voltage...
+          </Text>
+        ) : isError ? (
+          <Text style={{ color: colors.error, marginBottom: 20 }}>
+            ⚠ Could not fetch live voltage
+          </Text>
+        ) : (
+          <IndustrialGauge
+            value={latestReading}
+            max={260} 
+            label="Grid Voltage"
+            unit="V"
+            icon={Zap}
+            lowWarning={200}
+            highWarning={250}
+            greenZoneStart={220}
+            greenZoneEnd={240}
+          />
+        )}
 
         {/* Current Gauge */}
         <IndustrialGauge
           value={data.current}
-          max={20}
-          label="Load Current"
+          max={5} 
+          label="Panel Current"
           unit="A"
           icon={Activity}
-          lowWarning={0}
-          highWarning={16}
-          greenZoneStart={5}
-          greenZoneEnd={15}
+          lowWarning={0.2}
+          highWarning={2}
+          greenZoneStart={0.5}
+          greenZoneEnd={1.5}
         />
 
         {/* Battery Module */}
         <Text
           style={{
-            color: "#6b7280",
+            color: colors.textTertiary,
             fontSize: 11,
             fontWeight: "700",
             letterSpacing: 1.5,
@@ -306,7 +368,7 @@ export default function Dashboard() {
         {/* System Health Section */}
         <Text
           style={{
-            color: "#6b7280",
+            color: colors.textTertiary,
             fontSize: 11,
             fontWeight: "700",
             letterSpacing: 1.5,
@@ -357,15 +419,15 @@ export default function Dashboard() {
           style={{
             marginTop: 20,
             padding: 12,
-            backgroundColor: "#1a1a1a",
+            backgroundColor: colors.surface,
             borderRadius: 10,
             borderWidth: 1,
-            borderColor: "#333",
+            borderColor: colors.border,
           }}
         >
           <Text
             style={{
-              color: "#6b7280",
+              color: colors.textTertiary,
               fontSize: 10,
               textAlign: "center",
               lineHeight: 16,
@@ -377,6 +439,16 @@ export default function Dashboard() {
           </Text>
         </View>
       </ScrollView>
+
+      <ProfileModal
+        visible={profileModalVisible}
+        onClose={() => setProfileModalVisible(false)}
+      />
+      <RegistrationModal
+        visible={registrationModalVisible}
+        onClose={() => setRegistrationModalVisible(false)}
+        mode="house-and-user"
+      />
     </SafeAreaView>
   );
 }
