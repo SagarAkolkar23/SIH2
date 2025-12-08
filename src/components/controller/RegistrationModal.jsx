@@ -10,13 +10,12 @@ import {
   Pressable,
   ActivityIndicator,
 } from "react-native";
-import { X, Home, User, Mail, Lock, Hash, Building2 } from "lucide-react-native";
+import { X, Home, User, Mail, Lock, Hash, Building2, MapPin, Phone, Navigation } from "lucide-react-native";
 import { useThemeStore } from "../../store/themeStore";
 import {
   useRegisterHouseApi,
   useRegisterUserApi,
   useRegisterHouseAndUserApi,
-  useMicrogridsQuery,
   useHousesQuery,
 } from "../../service/controller/registrationService";
 
@@ -25,29 +24,24 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
   const [activeTab, setActiveTab] = useState(mode); // "house", "user", "house-and-user"
 
   // House form state
-  const [houseCode, setHouseCode] = useState("");
-  const [houseName, setHouseName] = useState("");
-  const [priorityLevel, setPriorityLevel] = useState("5");
-  const [selectedMicrogridId, setSelectedMicrogridId] = useState("");
+  const [houseAddress, setHouseAddress] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
 
   // User form state
-  const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [userRole, setUserRole] = useState("user");
+  const [phone, setPhone] = useState("");
+  const [userAddress, setUserAddress] = useState("");
   const [selectedHouseId, setSelectedHouseId] = useState("");
 
   // API hooks
   const {
-    data: microgridsData,
-    isLoading: microgridsLoading,
-    error: microgridsError,
-  } = useMicrogridsQuery();
-  const {
     data: housesData,
     refetch: refetchHouses,
     isLoading: housesLoading,
-  } = useHousesQuery(selectedMicrogridId || null);
+  } = useHousesQuery();
 
   const registerHouseMutation = useRegisterHouseApi();
   const registerUserMutation = useRegisterUserApi();
@@ -56,42 +50,44 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
   // Reset form when modal closes
   useEffect(() => {
     if (!visible) {
-      setHouseCode("");
-      setHouseName("");
-      setPriorityLevel("5");
-      setSelectedMicrogridId("");
-      setUsername("");
+      setHouseAddress("");
+      setLatitude("");
+      setLongitude("");
+      setName("");
       setEmail("");
       setPassword("");
-      setUserRole("user");
+      setPhone("");
+      setUserAddress("");
       setSelectedHouseId("");
     }
   }, [visible]);
 
-  // Refetch houses when microgrid changes (for user tab)
-  useEffect(() => {
-    if (selectedMicrogridId && activeTab === "user") {
-      refetchHouses();
-    }
-  }, [selectedMicrogridId, activeTab]);
-
   const handleRegisterHouse = async () => {
-    if (!houseCode || !houseName || !selectedMicrogridId) {
+    if (!houseAddress || !latitude || !longitude) {
       Alert.alert("Error", "Please fill all required fields");
       return;
     }
 
-    if (isNaN(parseInt(priorityLevel)) || parseInt(priorityLevel) < 1 || parseInt(priorityLevel) > 10) {
-      Alert.alert("Error", "Priority level must be a number between 1 and 10");
+    const lat = parseFloat(latitude);
+    const long = parseFloat(longitude);
+
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      Alert.alert("Error", "Latitude must be a number between -90 and 90");
+      return;
+    }
+
+    if (isNaN(long) || long < -180 || long > 180) {
+      Alert.alert("Error", "Longitude must be a number between -180 and 180");
       return;
     }
 
     registerHouseMutation.mutate(
       {
-        houseCode: houseCode.trim(),
-        name: houseName.trim(),
-        priorityLevel: parseInt(priorityLevel),
-        microgridId: selectedMicrogridId,
+        address: houseAddress.trim(),
+        locationCoordinates: {
+          lat: lat,
+          long: long
+        }
       },
       {
         onSuccess: (data) => {
@@ -108,7 +104,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
         onError: (error) => {
           Alert.alert(
             "Error",
-            error?.response?.data?.error || "Failed to register house"
+            error?.response?.data?.message || error?.response?.data?.error || "Failed to register house"
           );
         },
       }
@@ -116,7 +112,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
   };
 
   const handleRegisterUser = async () => {
-    if (!username || !email || !password) {
+    if (!name || !email || !password || !phone || !userAddress || !selectedHouseId) {
       Alert.alert("Error", "Please fill all required fields");
       return;
     }
@@ -128,70 +124,16 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
 
     registerUserMutation.mutate(
       {
-        username: username.trim(),
+        name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
-        role: userRole,
-        houseId: selectedHouseId || undefined,
+        phone: phone.trim(),
+        address: userAddress.trim(),
+        houseId: selectedHouseId,
       },
       {
         onSuccess: (data) => {
           Alert.alert("Success", "User registered successfully!", [
-            {
-              text: "OK",
-              onPress: () => {
-                onClose();
-              },
-            },
-          ]);
-        },
-        onError: (error) => {
-          Alert.alert(
-            "Error",
-            error?.response?.data?.error || "Failed to register user"
-          );
-        },
-      }
-    );
-  };
-
-  const handleRegisterBoth = async () => {
-    if (
-      !houseCode ||
-      !houseName ||
-      !selectedMicrogridId ||
-      !username ||
-      !email ||
-      !password
-    ) {
-      Alert.alert("Error", "Please fill all required fields");
-      return;
-    }
-
-    if (isNaN(parseInt(priorityLevel)) || parseInt(priorityLevel) < 1 || parseInt(priorityLevel) > 10) {
-      Alert.alert("Error", "Priority level must be a number between 1 and 10");
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
-      return;
-    }
-
-    registerBothMutation.mutate(
-      {
-        houseCode: houseCode.trim(),
-        houseName: houseName.trim(),
-        priorityLevel: parseInt(priorityLevel),
-        microgridId: selectedMicrogridId,
-        username: username.trim(),
-        email: email.trim().toLowerCase(),
-        password,
-        role: userRole,
-      },
-      {
-        onSuccess: (data) => {
-          Alert.alert("Success", "House and user registered successfully!", [
             {
               text: "OK",
               onPress: () => {
@@ -204,8 +146,96 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
         onError: (error) => {
           Alert.alert(
             "Error",
-            error?.response?.data?.error || "Failed to register house and user"
+            error?.response?.data?.message || error?.response?.data?.error || "Failed to register user"
           );
+        },
+      }
+    );
+  };
+
+  const handleRegisterBoth = async () => {
+    // Validate all required fields
+    if (
+      !houseAddress ||
+      !latitude ||
+      !longitude ||
+      !name ||
+      !email ||
+      !password ||
+      !phone ||
+      !userAddress
+    ) {
+      Alert.alert("Error", "Please fill all required fields");
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert("Error", "Please enter a valid email address");
+      return;
+    }
+
+    // Validate coordinates
+    const lat = parseFloat(latitude);
+    const long = parseFloat(longitude);
+
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      Alert.alert("Error", "Latitude must be a number between -90 and 90");
+      return;
+    }
+
+    if (isNaN(long) || long < -180 || long > 180) {
+      Alert.alert("Error", "Longitude must be a number between -180 and 180");
+      return;
+    }
+
+    // Validate password
+    if (password.length < 6) {
+      Alert.alert("Error", "Password must be at least 6 characters");
+      return;
+    }
+
+    // Validate phone (basic check - at least 10 characters)
+    if (phone.trim().length < 10) {
+      Alert.alert("Error", "Please enter a valid phone number");
+      return;
+    }
+
+    registerBothMutation.mutate(
+      {
+        houseAddress: houseAddress.trim(),
+        latitude: lat,
+        longitude: long,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        phone: phone.trim(),
+        userAddress: userAddress.trim(),
+      },
+      {
+        onSuccess: (data) => {
+          Alert.alert(
+            "Success", 
+            "House and user registered successfully! The user can now login with their credentials.",
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  refetchHouses();
+                  onClose();
+                },
+              },
+            ]
+          );
+        },
+        onError: (error) => {
+          console.error('Registration error:', error);
+          const errorMessage = error?.response?.data?.message || 
+                              error?.response?.data?.error || 
+                              error?.message ||
+                              "Failed to register house and user. Please try again.";
+          Alert.alert("Error", errorMessage);
         },
       }
     );
@@ -254,25 +284,43 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
               justifyContent: "space-between",
               alignItems: "center",
               padding: 20,
+              paddingBottom: 16,
               borderBottomWidth: 1,
               borderBottomColor: colors.border,
+              backgroundColor: colors.surface,
             }}
           >
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontSize: 20,
-                fontWeight: "800",
-              }}
-            >
-              Register New
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: 22,
+                  fontWeight: "800",
+                  marginBottom: 4,
+                }}
+              >
+                Register New Consumer
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 13,
+                  marginTop: 2,
+                }}
+              >
+                Add a new house and assign a consumer
+              </Text>
+            </View>
             <TouchableOpacity
               onPress={onClose}
-              style={{ padding: 4 }}
+              style={{
+                padding: 8,
+                borderRadius: 8,
+                backgroundColor: colors.surfaceSecondary,
+              }}
               activeOpacity={0.7}
             >
-              <X size={24} color={colors.textPrimary} />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -282,20 +330,29 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
               flexDirection: "row",
               borderBottomWidth: 1,
               borderBottomColor: colors.border,
+              backgroundColor: colors.surface,
+              paddingHorizontal: 8,
             }}
           >
             <TouchableOpacity
               onPress={() => setActiveTab("house-and-user")}
               style={{
                 flex: 1,
-                paddingVertical: 12,
+                paddingVertical: 14,
                 alignItems: "center",
-                borderBottomWidth: activeTab === "house-and-user" ? 2 : 0,
+                borderBottomWidth: activeTab === "house-and-user" ? 3 : 0,
                 borderBottomColor:
                   activeTab === "house-and-user"
                     ? colors.success
                     : "transparent",
+                backgroundColor:
+                  activeTab === "house-and-user"
+                    ? colors.success + "08"
+                    : "transparent",
+                borderRadius: 8,
+                marginHorizontal: 4,
               }}
+              activeOpacity={0.7}
             >
               <Text
                 style={{
@@ -303,8 +360,8 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                     activeTab === "house-and-user"
                       ? colors.success
                       : colors.textSecondary,
-                  fontWeight: activeTab === "house-and-user" ? "700" : "500",
-                  fontSize: 12,
+                  fontWeight: activeTab === "house-and-user" ? "700" : "600",
+                  fontSize: 13,
                 }}
               >
                 Both
@@ -314,12 +371,19 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
               onPress={() => setActiveTab("house")}
               style={{
                 flex: 1,
-                paddingVertical: 12,
+                paddingVertical: 14,
                 alignItems: "center",
-                borderBottomWidth: activeTab === "house" ? 2 : 0,
+                borderBottomWidth: activeTab === "house" ? 3 : 0,
                 borderBottomColor:
                   activeTab === "house" ? colors.success : "transparent",
+                backgroundColor:
+                  activeTab === "house"
+                    ? colors.success + "08"
+                    : "transparent",
+                borderRadius: 8,
+                marginHorizontal: 4,
               }}
+              activeOpacity={0.7}
             >
               <Text
                 style={{
@@ -327,8 +391,8 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                     activeTab === "house"
                       ? colors.success
                       : colors.textSecondary,
-                  fontWeight: activeTab === "house" ? "700" : "500",
-                  fontSize: 12,
+                  fontWeight: activeTab === "house" ? "700" : "600",
+                  fontSize: 13,
                 }}
               >
                 House
@@ -338,12 +402,19 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
               onPress={() => setActiveTab("user")}
               style={{
                 flex: 1,
-                paddingVertical: 12,
+                paddingVertical: 14,
                 alignItems: "center",
-                borderBottomWidth: activeTab === "user" ? 2 : 0,
+                borderBottomWidth: activeTab === "user" ? 3 : 0,
                 borderBottomColor:
                   activeTab === "user" ? colors.success : "transparent",
+                backgroundColor:
+                  activeTab === "user"
+                    ? colors.success + "08"
+                    : "transparent",
+                borderRadius: 8,
+                marginHorizontal: 4,
               }}
+              activeOpacity={0.7}
             >
               <Text
                 style={{
@@ -351,8 +422,8 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                     activeTab === "user"
                       ? colors.success
                       : colors.textSecondary,
-                  fontWeight: activeTab === "user" ? "700" : "500",
-                  fontSize: 12,
+                  fontWeight: activeTab === "user" ? "700" : "600",
+                  fontSize: 13,
                 }}
               >
                 User
@@ -367,122 +438,51 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
             {/* House and User Form */}
             {activeTab === "house-and-user" && (
               <>
-                <Text
+                {/* Section Header with Icon */}
+                <View
                   style={{
-                    color: colors.textPrimary,
-                    fontSize: 16,
-                    fontWeight: "700",
-                    marginBottom: 16,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 20,
+                    marginTop: 8,
                   }}
                 >
-                  House Information
-                </Text>
-
-                {/* Microgrid Selection */}
-                <View style={{ marginBottom: 16 }}>
-                  <Text
+                  <View
                     style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: "600",
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: colors.success + "20",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
                     }}
                   >
-                    Microgrid *
-                  </Text>
-                  {microgridsLoading ? (
-                    <View
+                    <Home size={20} color={colors.success} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
                       style={{
-                        padding: 20,
-                        alignItems: "center",
-                        justifyContent: "center",
+                        color: colors.textPrimary,
+                        fontSize: 18,
+                        fontWeight: "700",
+                        marginBottom: 2,
                       }}
                     >
-                      <ActivityIndicator size="small" color={colors.success} />
-                      <Text
-                        style={{
-                          color: colors.textTertiary,
-                          marginTop: 8,
-                          fontSize: 12,
-                        }}
-                      >
-                        Loading microgrids...
-                      </Text>
-                    </View>
-                  ) : microgridsError ? (
-                    <View
-                      style={{
-                        padding: 12,
-                        backgroundColor: colors.error + "20",
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: colors.error,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: colors.error,
-                          fontSize: 12,
-                        }}
-                      >
-                        Error loading microgrids. Please try again.
-                      </Text>
-                    </View>
-                  ) : microgridsData?.microgrids && microgridsData.microgrids.length > 0 ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={{ marginTop: 8 }}
-                    >
-                      {microgridsData.microgrids.map((mg) => (
-                        <TouchableOpacity
-                          key={mg.id}
-                          onPress={() => setSelectedMicrogridId(mg.id)}
-                          style={{
-                            paddingHorizontal: 16,
-                            paddingVertical: 10,
-                            borderRadius: 12,
-                            marginRight: 8,
-                            backgroundColor:
-                              selectedMicrogridId === mg.id
-                                ? colors.success
-                                : colors.surfaceSecondary,
-                            borderWidth: 1,
-                            borderColor:
-                              selectedMicrogridId === mg.id
-                                ? colors.success
-                                : colors.border,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color:
-                                selectedMicrogridId === mg.id
-                                  ? "#fff"
-                                  : colors.textPrimary,
-                              fontSize: 12,
-                              fontWeight: "600",
-                            }}
-                          >
-                            {mg.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  ) : (
+                      House Information
+                    </Text>
                     <Text
                       style={{
                         color: colors.textTertiary,
                         fontSize: 12,
-                        fontStyle: "italic",
                       }}
                     >
-                      No microgrids available
+                      Enter the physical location details
                     </Text>
-                  )}
+                  </View>
                 </View>
 
-                {/* House Code */}
+                {/* House Address */}
                 <View style={{ marginBottom: 16 }}>
                   <Text
                     style={{
@@ -492,7 +492,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       fontWeight: "600",
                     }}
                   >
-                    House Code *
+                    House Address *
                   </Text>
                   <View
                     style={{
@@ -506,24 +506,23 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       backgroundColor: colors.surfaceSecondary,
                     }}
                   >
-                    <Hash size={20} color={colors.textSecondary} />
+                    <MapPin size={20} color={colors.textSecondary} />
                     <TextInput
-                      placeholder="e.g., H001, H002"
+                      placeholder="e.g., 123 Main Street, City"
                       placeholderTextColor={colors.textTertiary}
-                      value={houseCode}
-                      onChangeText={setHouseCode}
+                      value={houseAddress}
+                      onChangeText={setHouseAddress}
                       style={{
                         flex: 1,
                         marginLeft: 12,
                         color: colors.textPrimary,
                         fontSize: 14,
                       }}
-                      autoCapitalize="characters"
                     />
                   </View>
                 </View>
 
-                {/* House Name */}
+                {/* Latitude */}
                 <View style={{ marginBottom: 16 }}>
                   <Text
                     style={{
@@ -533,7 +532,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       fontWeight: "600",
                     }}
                   >
-                    House Name *
+                    Latitude * (-90 to 90)
                   </Text>
                   <View
                     style={{
@@ -547,12 +546,13 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       backgroundColor: colors.surfaceSecondary,
                     }}
                   >
-                    <Home size={20} color={colors.textSecondary} />
+                    <Navigation size={20} color={colors.textSecondary} />
                     <TextInput
-                      placeholder="e.g., House 1, John's House"
+                      placeholder="e.g., 28.6139"
                       placeholderTextColor={colors.textTertiary}
-                      value={houseName}
-                      onChangeText={setHouseName}
+                      value={latitude}
+                      onChangeText={setLatitude}
+                      keyboardType="decimal-pad"
                       style={{
                         flex: 1,
                         marginLeft: 12,
@@ -563,7 +563,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   </View>
                 </View>
 
-                {/* Priority Level */}
+                {/* Longitude */}
                 <View style={{ marginBottom: 24 }}>
                   <Text
                     style={{
@@ -573,7 +573,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       fontWeight: "600",
                     }}
                   >
-                    Priority Level (1-10) *
+                    Longitude * (-180 to 180)
                   </Text>
                   <View
                     style={{
@@ -587,178 +587,331 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       backgroundColor: colors.surfaceSecondary,
                     }}
                   >
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        marginRight: 12,
-                        fontSize: 12,
-                      }}
-                    >
-                      1 (Low)
-                    </Text>
+                    <Navigation size={20} color={colors.textSecondary} />
                     <TextInput
-                      placeholder="5"
+                      placeholder="e.g., 77.2090"
                       placeholderTextColor={colors.textTertiary}
-                      value={priorityLevel}
-                      onChangeText={setPriorityLevel}
-                      keyboardType="number-pad"
+                      value={longitude}
+                      onChangeText={setLongitude}
+                      keyboardType="decimal-pad"
                       style={{
                         flex: 1,
+                        marginLeft: 12,
                         color: colors.textPrimary,
                         fontSize: 14,
-                        textAlign: "center",
                       }}
                     />
+                  </View>
+                </View>
+
+                {/* Divider with Icon */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginVertical: 24,
+                  }}
+                >
+                  <View
+                    style={{
+                      flex: 1,
+                      height: 1,
+                      backgroundColor: colors.border,
+                    }}
+                  />
+                  <View
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      backgroundColor: colors.surfaceSecondary,
+                      borderRadius: 20,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                  >
                     <Text
                       style={{
-                        color: colors.textSecondary,
-                        marginLeft: 12,
+                        color: colors.textTertiary,
+                        fontSize: 11,
+                        fontWeight: "600",
+                      }}
+                    >
+                      THEN
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      flex: 1,
+                      height: 1,
+                      backgroundColor: colors.border,
+                    }}
+                  />
+                </View>
+
+                {/* User Section Header */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 20,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: colors.accent + "20",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    <User size={20} color={colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: 18,
+                        fontWeight: "700",
+                        marginBottom: 2,
+                      }}
+                    >
+                      Consumer Information
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.textTertiary,
                         fontSize: 12,
                       }}
                     >
-                      10 (High)
+                      Create account for the house owner
                     </Text>
                   </View>
-                  <Text
-                    style={{
-                      color: colors.textTertiary,
-                      fontSize: 10,
-                      marginTop: 4,
-                    }}
-                  >
-                    Lower priority = first to be shed during load management
-                  </Text>
                 </View>
 
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: colors.border,
-                    marginVertical: 20,
-                  }}
-                />
-
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontSize: 16,
-                    fontWeight: "700",
-                    marginBottom: 16,
-                  }}
-                >
-                  User Information
-                </Text>
-
-                {/* Username */}
-                <View style={{ marginBottom: 16 }}>
+                {/* Name */}
+                <View style={{ marginBottom: 18 }}>
                   <Text
                     style={{
                       color: colors.textSecondary,
-                      fontSize: 12,
-                      marginBottom: 8,
+                      fontSize: 13,
+                      marginBottom: 10,
                       fontWeight: "600",
                     }}
                   >
-                    Username *
+                    Full Name <Text style={{ color: colors.error }}>*</Text>
                   </Text>
                   <View
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderRadius: 12,
-                      paddingHorizontal: 12,
-                      paddingVertical: 12,
+                      borderWidth: 1.5,
+                      borderColor: name ? colors.success + "40" : colors.border,
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
                       backgroundColor: colors.surfaceSecondary,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 2,
+                      elevation: 1,
                     }}
                   >
-                    <User size={20} color={colors.textSecondary} />
+                    <User size={20} color={name ? colors.success : colors.textSecondary} />
                     <TextInput
-                      placeholder="Username"
+                      placeholder="e.g., John Doe"
                       placeholderTextColor={colors.textTertiary}
-                      value={username}
-                      onChangeText={setUsername}
+                      value={name}
+                      onChangeText={setName}
                       style={{
                         flex: 1,
                         marginLeft: 12,
                         color: colors.textPrimary,
-                        fontSize: 14,
+                        fontSize: 15,
+                        fontWeight: "500",
                       }}
-                      autoCapitalize="none"
+                      autoCapitalize="words"
                     />
                   </View>
                 </View>
 
                 {/* Email */}
-                <View style={{ marginBottom: 16 }}>
+                <View style={{ marginBottom: 18 }}>
                   <Text
                     style={{
                       color: colors.textSecondary,
-                      fontSize: 12,
-                      marginBottom: 8,
+                      fontSize: 13,
+                      marginBottom: 10,
                       fontWeight: "600",
                     }}
                   >
-                    Email *
+                    Email Address <Text style={{ color: colors.error }}>*</Text>
                   </Text>
                   <View
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderRadius: 12,
-                      paddingHorizontal: 12,
-                      paddingVertical: 12,
+                      borderWidth: 1.5,
+                      borderColor: email ? colors.success + "40" : colors.border,
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
                       backgroundColor: colors.surfaceSecondary,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 2,
+                      elevation: 1,
                     }}
                   >
-                    <Mail size={20} color={colors.textSecondary} />
+                    <Mail size={20} color={email ? colors.success : colors.textSecondary} />
                     <TextInput
-                      placeholder="user@example.com"
+                      placeholder="john.doe@example.com"
                       placeholderTextColor={colors.textTertiary}
                       value={email}
                       onChangeText={setEmail}
                       keyboardType="email-address"
                       autoCapitalize="none"
+                      autoCorrect={false}
                       style={{
                         flex: 1,
                         marginLeft: 12,
                         color: colors.textPrimary,
-                        fontSize: 14,
+                        fontSize: 15,
+                        fontWeight: "500",
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* Phone */}
+                <View style={{ marginBottom: 18 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 13,
+                      marginBottom: 10,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Phone Number <Text style={{ color: colors.error }}>*</Text>
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderWidth: 1.5,
+                      borderColor: phone ? colors.success + "40" : colors.border,
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      backgroundColor: colors.surfaceSecondary,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 2,
+                      elevation: 1,
+                    }}
+                  >
+                    <Phone size={20} color={phone ? colors.success : colors.textSecondary} />
+                    <TextInput
+                      placeholder="+91 9876543210"
+                      placeholderTextColor={colors.textTertiary}
+                      value={phone}
+                      onChangeText={setPhone}
+                      keyboardType="phone-pad"
+                      style={{
+                        flex: 1,
+                        marginLeft: 12,
+                        color: colors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: "500",
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* User Address */}
+                <View style={{ marginBottom: 18 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 13,
+                      marginBottom: 10,
+                      fontWeight: "600",
+                    }}
+                  >
+                    User Address <Text style={{ color: colors.error }}>*</Text>
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderWidth: 1.5,
+                      borderColor: userAddress ? colors.success + "40" : colors.border,
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      backgroundColor: colors.surfaceSecondary,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 2,
+                      elevation: 1,
+                    }}
+                  >
+                    <MapPin size={20} color={userAddress ? colors.success : colors.textSecondary} />
+                    <TextInput
+                      placeholder="e.g., 123 Main Street, New Delhi"
+                      placeholderTextColor={colors.textTertiary}
+                      value={userAddress}
+                      onChangeText={setUserAddress}
+                      style={{
+                        flex: 1,
+                        marginLeft: 12,
+                        color: colors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: "500",
                       }}
                     />
                   </View>
                 </View>
 
                 {/* Password */}
-                <View style={{ marginBottom: 16 }}>
+                <View style={{ marginBottom: 28 }}>
                   <Text
                     style={{
                       color: colors.textSecondary,
-                      fontSize: 12,
-                      marginBottom: 8,
+                      fontSize: 13,
+                      marginBottom: 10,
                       fontWeight: "600",
                     }}
                   >
-                    Password *
+                    Password <Text style={{ color: colors.error }}>*</Text>
                   </Text>
                   <View
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderRadius: 12,
-                      paddingHorizontal: 12,
-                      paddingVertical: 12,
+                      borderWidth: 1.5,
+                      borderColor: password ? colors.success + "40" : colors.border,
+                      borderRadius: 14,
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
                       backgroundColor: colors.surfaceSecondary,
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 2,
+                      elevation: 1,
                     }}
                   >
-                    <Lock size={20} color={colors.textSecondary} />
+                    <Lock size={20} color={password ? colors.success : colors.textSecondary} />
                     <TextInput
-                      placeholder="Minimum 6 characters"
+                      placeholder="Enter secure password"
                       placeholderTextColor={colors.textTertiary}
                       value={password}
                       onChangeText={setPassword}
@@ -767,64 +920,21 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                         flex: 1,
                         marginLeft: 12,
                         color: colors.textPrimary,
-                        fontSize: 14,
+                        fontSize: 15,
+                        fontWeight: "500",
                       }}
                     />
                   </View>
-                </View>
-
-                {/* Role Selection */}
-                <View style={{ marginBottom: 24 }}>
                   <Text
                     style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: "600",
+                      color: colors.textTertiary,
+                      fontSize: 11,
+                      marginTop: 8,
+                      marginLeft: 4,
                     }}
                   >
-                    User Role *
+                    Must be at least 6 characters long
                   </Text>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 8,
-                    }}
-                  >
-                    {["user", "controller", "admin"].map((role) => (
-                      <TouchableOpacity
-                        key={role}
-                        onPress={() => setUserRole(role)}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 12,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor:
-                            userRole === role ? colors.success : colors.border,
-                          backgroundColor:
-                            userRole === role
-                              ? colors.success + "20"
-                              : colors.surfaceSecondary,
-                          alignItems: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color:
-                              userRole === role
-                                ? colors.success
-                                : colors.textPrimary,
-                            fontWeight: userRole === role ? "700" : "500",
-                            textTransform: "capitalize",
-                            fontSize: 12,
-                          }}
-                        >
-                          {role}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
                 </View>
 
                 {/* Submit Button */}
@@ -832,49 +942,85 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   onPress={handleRegisterBoth}
                   disabled={
                     registerBothMutation.isPending ||
-                    !houseCode ||
-                    !houseName ||
-                    !selectedMicrogridId ||
-                    !username ||
+                    !houseAddress ||
+                    !latitude ||
+                    !longitude ||
+                    !name ||
                     !email ||
-                    !password
+                    !password ||
+                    !phone ||
+                    !userAddress
                   }
                   style={{
                     backgroundColor:
                       registerBothMutation.isPending ||
-                      !houseCode ||
-                      !houseName ||
-                      !selectedMicrogridId ||
-                      !username ||
+                      !houseAddress ||
+                      !latitude ||
+                      !longitude ||
+                      !name ||
                       !email ||
-                      !password
+                      !password ||
+                      !phone ||
+                      !userAddress
                         ? colors.textTertiary
                         : colors.success,
-                    paddingVertical: 16,
-                    borderRadius: 12,
+                    paddingVertical: 18,
+                    borderRadius: 14,
                     alignItems: "center",
                     marginTop: 8,
                     flexDirection: "row",
                     justifyContent: "center",
-                    gap: 8,
+                    gap: 10,
+                    shadowColor: colors.success,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 6,
                   }}
-                  activeOpacity={0.7}
+                  activeOpacity={0.8}
                 >
-                  {registerBothMutation.isPending && (
-                    <ActivityIndicator size="small" color="#fff" />
+                  {registerBothMutation.isPending ? (
+                    <>
+                      <ActivityIndicator size="small" color="#fff" />
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontSize: 16,
+                          fontWeight: "700",
+                          marginLeft: 8,
+                        }}
+                      >
+                        Registering...
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Home size={18} color="#fff" />
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontSize: 16,
+                          fontWeight: "700",
+                        }}
+                      >
+                        Register House & Consumer
+                      </Text>
+                    </>
                   )}
-                  <Text
-                    style={{
-                      color: "#fff",
-                      fontSize: 16,
-                      fontWeight: "700",
-                    }}
-                  >
-                    {registerBothMutation.isPending
-                      ? "Registering..."
-                      : "Register House & User"}
-                  </Text>
                 </TouchableOpacity>
+                
+                {/* Info Text */}
+                <Text
+                  style={{
+                    color: colors.textTertiary,
+                    fontSize: 12,
+                    textAlign: "center",
+                    marginTop: 16,
+                    lineHeight: 18,
+                  }}
+                >
+                  The house will be created first, then the consumer account will be automatically linked to it.
+                </Text>
               </>
             )}
 
@@ -892,7 +1038,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   House Information
                 </Text>
 
-                {/* Microgrid Selection */}
+                {/* House Address */}
                 <View style={{ marginBottom: 16 }}>
                   <Text
                     style={{
@@ -902,111 +1048,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       fontWeight: "600",
                     }}
                   >
-                    Microgrid *
-                  </Text>
-                  {microgridsLoading ? (
-                    <View
-                      style={{
-                        padding: 20,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <ActivityIndicator size="small" color={colors.success} />
-                      <Text
-                        style={{
-                          color: colors.textTertiary,
-                          marginTop: 8,
-                          fontSize: 12,
-                        }}
-                      >
-                        Loading microgrids...
-                      </Text>
-                    </View>
-                  ) : microgridsError ? (
-                    <View
-                      style={{
-                        padding: 12,
-                        backgroundColor: colors.error + "20",
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: colors.error,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: colors.error,
-                          fontSize: 12,
-                        }}
-                      >
-                        Error loading microgrids. Please try again.
-                      </Text>
-                    </View>
-                  ) : microgridsData?.microgrids && microgridsData.microgrids.length > 0 ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={{ marginTop: 8 }}
-                    >
-                      {microgridsData.microgrids.map((mg) => (
-                        <TouchableOpacity
-                          key={mg.id}
-                          onPress={() => setSelectedMicrogridId(mg.id)}
-                          style={{
-                            paddingHorizontal: 16,
-                            paddingVertical: 10,
-                            borderRadius: 12,
-                            marginRight: 8,
-                            backgroundColor:
-                              selectedMicrogridId === mg.id
-                                ? colors.success
-                                : colors.surfaceSecondary,
-                            borderWidth: 1,
-                            borderColor:
-                              selectedMicrogridId === mg.id
-                                ? colors.success
-                                : colors.border,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color:
-                                selectedMicrogridId === mg.id
-                                  ? "#fff"
-                                  : colors.textPrimary,
-                              fontSize: 12,
-                              fontWeight: "600",
-                            }}
-                          >
-                            {mg.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  ) : (
-                    <Text
-                      style={{
-                        color: colors.textTertiary,
-                        fontSize: 12,
-                        fontStyle: "italic",
-                      }}
-                    >
-                      No microgrids available
-                    </Text>
-                  )}
-                </View>
-
-                {/* House Code */}
-                <View style={{ marginBottom: 16 }}>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: "600",
-                    }}
-                  >
-                    House Code *
+                    House Address *
                   </Text>
                   <View
                     style={{
@@ -1020,24 +1062,23 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       backgroundColor: colors.surfaceSecondary,
                     }}
                   >
-                    <Hash size={20} color={colors.textSecondary} />
+                    <MapPin size={20} color={colors.textSecondary} />
                     <TextInput
-                      placeholder="e.g., H001, H002"
+                      placeholder="e.g., 123 Main Street, City"
                       placeholderTextColor={colors.textTertiary}
-                      value={houseCode}
-                      onChangeText={setHouseCode}
+                      value={houseAddress}
+                      onChangeText={setHouseAddress}
                       style={{
                         flex: 1,
                         marginLeft: 12,
                         color: colors.textPrimary,
                         fontSize: 14,
                       }}
-                      autoCapitalize="characters"
                     />
                   </View>
                 </View>
 
-                {/* House Name */}
+                {/* Latitude */}
                 <View style={{ marginBottom: 16 }}>
                   <Text
                     style={{
@@ -1047,7 +1088,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       fontWeight: "600",
                     }}
                   >
-                    House Name *
+                    Latitude * (-90 to 90)
                   </Text>
                   <View
                     style={{
@@ -1061,12 +1102,13 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       backgroundColor: colors.surfaceSecondary,
                     }}
                   >
-                    <Home size={20} color={colors.textSecondary} />
+                    <Navigation size={20} color={colors.textSecondary} />
                     <TextInput
-                      placeholder="e.g., House 1, John's House"
+                      placeholder="e.g., 28.6139"
                       placeholderTextColor={colors.textTertiary}
-                      value={houseName}
-                      onChangeText={setHouseName}
+                      value={latitude}
+                      onChangeText={setLatitude}
+                      keyboardType="decimal-pad"
                       style={{
                         flex: 1,
                         marginLeft: 12,
@@ -1077,7 +1119,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   </View>
                 </View>
 
-                {/* Priority Level */}
+                {/* Longitude */}
                 <View style={{ marginBottom: 24 }}>
                   <Text
                     style={{
@@ -1087,7 +1129,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       fontWeight: "600",
                     }}
                   >
-                    Priority Level (1-10) *
+                    Longitude * (-180 to 180)
                   </Text>
                   <View
                     style={{
@@ -1101,47 +1143,21 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       backgroundColor: colors.surfaceSecondary,
                     }}
                   >
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        marginRight: 12,
-                        fontSize: 12,
-                      }}
-                    >
-                      1 (Low)
-                    </Text>
+                    <Navigation size={20} color={colors.textSecondary} />
                     <TextInput
-                      placeholder="5"
+                      placeholder="e.g., 77.2090"
                       placeholderTextColor={colors.textTertiary}
-                      value={priorityLevel}
-                      onChangeText={setPriorityLevel}
-                      keyboardType="number-pad"
+                      value={longitude}
+                      onChangeText={setLongitude}
+                      keyboardType="decimal-pad"
                       style={{
                         flex: 1,
+                        marginLeft: 12,
                         color: colors.textPrimary,
                         fontSize: 14,
-                        textAlign: "center",
                       }}
                     />
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        marginLeft: 12,
-                        fontSize: 12,
-                      }}
-                    >
-                      10 (High)
-                    </Text>
                   </View>
-                  <Text
-                    style={{
-                      color: colors.textTertiary,
-                      fontSize: 10,
-                      marginTop: 4,
-                    }}
-                  >
-                    Lower priority = first to be shed during load management
-                  </Text>
                 </View>
 
                 {/* Submit Button */}
@@ -1149,16 +1165,16 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   onPress={handleRegisterHouse}
                   disabled={
                     registerHouseMutation.isPending ||
-                    !houseCode ||
-                    !houseName ||
-                    !selectedMicrogridId
+                    !houseAddress ||
+                    !latitude ||
+                    !longitude
                   }
                   style={{
                     backgroundColor:
                       registerHouseMutation.isPending ||
-                      !houseCode ||
-                      !houseName ||
-                      !selectedMicrogridId
+                      !houseAddress ||
+                      !latitude ||
+                      !longitude
                         ? colors.textTertiary
                         : colors.success,
                     paddingVertical: 16,
@@ -1203,7 +1219,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   User Information
                 </Text>
 
-                {/* Microgrid Selection (to filter houses) */}
+                {/* House Selection (Required) */}
                 <View style={{ marginBottom: 16 }}>
                   <Text
                     style={{
@@ -1213,107 +1229,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       fontWeight: "600",
                     }}
                   >
-                    Microgrid (to filter houses)
-                  </Text>
-                  {microgridsLoading ? (
-                    <View
-                      style={{
-                        padding: 12,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <ActivityIndicator size="small" color={colors.success} />
-                    </View>
-                  ) : microgridsData?.microgrids && microgridsData.microgrids.length > 0 ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={{ marginTop: 8 }}
-                    >
-                      <TouchableOpacity
-                        onPress={() => {
-                          setSelectedMicrogridId("");
-                          setSelectedHouseId("");
-                        }}
-                        style={{
-                          paddingHorizontal: 16,
-                          paddingVertical: 10,
-                          borderRadius: 12,
-                          marginRight: 8,
-                          backgroundColor:
-                            selectedMicrogridId === ""
-                              ? colors.success
-                              : colors.surfaceSecondary,
-                          borderWidth: 1,
-                          borderColor:
-                            selectedMicrogridId === ""
-                              ? colors.success
-                              : colors.border,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color:
-                              selectedMicrogridId === ""
-                                ? "#fff"
-                                : colors.textPrimary,
-                            fontSize: 12,
-                            fontWeight: "600",
-                          }}
-                        >
-                          All
-                        </Text>
-                      </TouchableOpacity>
-                      {microgridsData.microgrids.map((mg) => (
-                        <TouchableOpacity
-                          key={mg.id}
-                          onPress={() => setSelectedMicrogridId(mg.id)}
-                          style={{
-                            paddingHorizontal: 16,
-                            paddingVertical: 10,
-                            borderRadius: 12,
-                            marginRight: 8,
-                            backgroundColor:
-                              selectedMicrogridId === mg.id
-                                ? colors.success
-                                : colors.surfaceSecondary,
-                            borderWidth: 1,
-                            borderColor:
-                              selectedMicrogridId === mg.id
-                                ? colors.success
-                                : colors.border,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color:
-                                selectedMicrogridId === mg.id
-                                  ? "#fff"
-                                  : colors.textPrimary,
-                              fontSize: 12,
-                              fontWeight: "600",
-                            }}
-                          >
-                            {mg.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  ) : null}
-                </View>
-
-                {/* House Selection (Optional) */}
-                <View style={{ marginBottom: 16 }}>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: "600",
-                    }}
-                  >
-                    Assign to House (Optional)
+                    Assign to House *
                   </Text>
                   {housesLoading ? (
                     <View
@@ -1334,59 +1250,30 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                         Loading houses...
                       </Text>
                     </View>
-                  ) : housesData?.houses && housesData.houses.length > 0 ? (
+                  ) : housesData?.data?.houses && housesData.data.houses.length > 0 ? (
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
                       style={{ marginTop: 8 }}
                     >
-                      <TouchableOpacity
-                        onPress={() => setSelectedHouseId("")}
-                        style={{
-                          paddingHorizontal: 16,
-                          paddingVertical: 10,
-                          borderRadius: 12,
-                          marginRight: 8,
-                          backgroundColor:
-                            selectedHouseId === ""
-                              ? colors.success
-                              : colors.surfaceSecondary,
-                          borderWidth: 1,
-                          borderColor:
-                            selectedHouseId === ""
-                              ? colors.success
-                              : colors.border,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color:
-                              selectedHouseId === ""
-                                ? "#fff"
-                                : colors.textPrimary,
-                            fontSize: 12,
-                            fontWeight: "600",
-                          }}
-                        >
-                          None
-                        </Text>
-                      </TouchableOpacity>
-                      {housesData.houses.map((house) => (
+                      {housesData.data.houses
+                        .filter((house) => !house.ownerId) // Only show houses without owners
+                        .map((house) => (
                         <TouchableOpacity
-                          key={house.id}
-                          onPress={() => setSelectedHouseId(house.id)}
+                          key={house._id}
+                          onPress={() => setSelectedHouseId(house._id)}
                           style={{
                             paddingHorizontal: 16,
                             paddingVertical: 10,
                             borderRadius: 12,
                             marginRight: 8,
                             backgroundColor:
-                              selectedHouseId === house.id
+                              selectedHouseId === house._id
                                 ? colors.success
                                 : colors.surfaceSecondary,
                             borderWidth: 1,
                             borderColor:
-                              selectedHouseId === house.id
+                              selectedHouseId === house._id
                                 ? colors.success
                                 : colors.border,
                           }}
@@ -1394,14 +1281,14 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                           <Text
                             style={{
                               color:
-                                selectedHouseId === house.id
+                                selectedHouseId === house._id
                                   ? "#fff"
                                   : colors.textPrimary,
                               fontSize: 12,
                               fontWeight: "600",
                             }}
                           >
-                            {house.houseCode} - {house.name}
+                            {house.address}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -1415,14 +1302,12 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                         marginTop: 8,
                       }}
                     >
-                      {selectedMicrogridId
-                        ? "No houses found for this microgrid"
-                        : "Select a microgrid to see houses"}
+                      No available houses found
                     </Text>
                   )}
                 </View>
 
-                {/* Username */}
+                {/* Name */}
                 <View style={{ marginBottom: 16 }}>
                   <Text
                     style={{
@@ -1432,7 +1317,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       fontWeight: "600",
                     }}
                   >
-                    Username *
+                    Full Name *
                   </Text>
                   <View
                     style={{
@@ -1448,17 +1333,16 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   >
                     <User size={20} color={colors.textSecondary} />
                     <TextInput
-                      placeholder="Username"
+                      placeholder="Full Name"
                       placeholderTextColor={colors.textTertiary}
-                      value={username}
-                      onChangeText={setUsername}
+                      value={name}
+                      onChangeText={setName}
                       style={{
                         flex: 1,
                         marginLeft: 12,
                         color: colors.textPrimary,
                         fontSize: 14,
                       }}
-                      autoCapitalize="none"
                     />
                   </View>
                 </View>
@@ -1505,8 +1389,89 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   </View>
                 </View>
 
-                {/* Password */}
+                {/* Phone */}
                 <View style={{ marginBottom: 16 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginBottom: 8,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Phone *
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: 12,
+                      paddingHorizontal: 12,
+                      paddingVertical: 12,
+                      backgroundColor: colors.surfaceSecondary,
+                    }}
+                  >
+                    <Phone size={20} color={colors.textSecondary} />
+                    <TextInput
+                      placeholder="+1234567890"
+                      placeholderTextColor={colors.textTertiary}
+                      value={phone}
+                      onChangeText={setPhone}
+                      keyboardType="phone-pad"
+                      style={{
+                        flex: 1,
+                        marginLeft: 12,
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* User Address */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      marginBottom: 8,
+                      fontWeight: "600",
+                    }}
+                  >
+                    User Address *
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: 12,
+                      paddingHorizontal: 12,
+                      paddingVertical: 12,
+                      backgroundColor: colors.surfaceSecondary,
+                    }}
+                  >
+                    <MapPin size={20} color={colors.textSecondary} />
+                    <TextInput
+                      placeholder="User's address"
+                      placeholderTextColor={colors.textTertiary}
+                      value={userAddress}
+                      onChangeText={setUserAddress}
+                      style={{
+                        flex: 1,
+                        marginLeft: 12,
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* Password */}
+                <View style={{ marginBottom: 24 }}>
                   <Text
                     style={{
                       color: colors.textSecondary,
@@ -1546,75 +1511,27 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   </View>
                 </View>
 
-                {/* Role Selection */}
-                <View style={{ marginBottom: 24 }}>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: "600",
-                    }}
-                  >
-                    User Role *
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 8,
-                    }}
-                  >
-                    {["user", "controller", "admin"].map((role) => (
-                      <TouchableOpacity
-                        key={role}
-                        onPress={() => setUserRole(role)}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 12,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor:
-                            userRole === role ? colors.success : colors.border,
-                          backgroundColor:
-                            userRole === role
-                              ? colors.success + "20"
-                              : colors.surfaceSecondary,
-                          alignItems: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color:
-                              userRole === role
-                                ? colors.success
-                                : colors.textPrimary,
-                            fontWeight: userRole === role ? "700" : "500",
-                            textTransform: "capitalize",
-                            fontSize: 12,
-                          }}
-                        >
-                          {role}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
                 {/* Submit Button */}
                 <TouchableOpacity
                   onPress={handleRegisterUser}
                   disabled={
                     registerUserMutation.isPending ||
-                    !username ||
+                    !name ||
                     !email ||
-                    !password
+                    !password ||
+                    !phone ||
+                    !userAddress ||
+                    !selectedHouseId
                   }
                   style={{
                     backgroundColor:
                       registerUserMutation.isPending ||
-                      !username ||
+                      !name ||
                       !email ||
-                      !password
+                      !password ||
+                      !phone ||
+                      !userAddress ||
+                      !selectedHouseId
                         ? colors.textTertiary
                         : colors.success,
                     paddingVertical: 16,

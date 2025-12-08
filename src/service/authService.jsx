@@ -19,21 +19,22 @@ export const useLoginApi = () => {
       console.log('✅ [FRONTEND AUTH SERVICE] Login API response received');
       console.log('📦 [FRONTEND AUTH SERVICE] Response data keys:', Object.keys(data || {}));
       
-      // Backend returns 'accessToken', not 'token'
-      const token = data?.accessToken || data?.token;
+      // Backend returns: { success: true, data: { user, token } }
+      const token = data?.data?.token;
+      const user = data?.data?.user;
       
-      if (token && data?.user) {
+      if (token && user) {
         console.log('✅ [FRONTEND AUTH SERVICE] Token found:', token.substring(0, 20) + '...');
         console.log('👤 [FRONTEND AUTH SERVICE] User data:', {
-          id: data.user.id,
-          email: data.user.email,
-          role: data.user.role,
+          id: user._id,
+          email: user.email,
+          role: user.role,
         });
         
         console.log('💾 [FRONTEND AUTH SERVICE] Saving auth data to store...');
         setAuthData({
           token: token,
-          user: data.user,
+          user: user,
         });
         
         console.log('✅ [FRONTEND AUTH SERVICE] Auth data saved to store successfully');
@@ -48,17 +49,19 @@ export const useLoginApi = () => {
 export const useLogoutApi = () => {
   const clearAuth = useAuthStore((s) => s.clearAuth);
 
-  return useCustomMutation({
-    mutationFn: () => {
-      console.log('🚪 [FRONTEND AUTH SERVICE] Logout mutation initiated');
-      return {
-        method: "POST",
-        url: "/api/auth/logout", // Fixed: Added leading slash
-      };
-    },
-    onSuccess: () => {
-      console.log('✅ [FRONTEND AUTH SERVICE] Logout successful, clearing auth');
+  // Logout is handled client-side (backend has no logout endpoint)
+  // JWT tokens are stateless, so we just clear local storage
+  return {
+    mutate: () => {
+      console.log('🚪 [FRONTEND AUTH SERVICE] Logout initiated');
       clearAuth();
+      console.log('✅ [FRONTEND AUTH SERVICE] Logout successful, auth cleared');
     },
-  });
+    mutateAsync: async () => {
+      console.log('🚪 [FRONTEND AUTH SERVICE] Logout initiated');
+      clearAuth();
+      console.log('✅ [FRONTEND AUTH SERVICE] Logout successful, auth cleared');
+      return Promise.resolve();
+    },
+  };
 };

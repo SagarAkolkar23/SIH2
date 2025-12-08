@@ -156,7 +156,7 @@ const ProfileModal = ({ visible, onClose }) => {
                   marginLeft: 26,
                 }}
               >
-                {user?.username || "N/A"}
+                {user?.name || "N/A"}
               </Text>
 
               <View

@@ -3,33 +3,16 @@ import api from "../../api/useQuery";
 
 // Query Keys
 const REGISTRATION_KEYS = {
-  microgrids: ["registration", "microgrids"],
-  houses: (microgridId) => ["registration", "houses", microgridId || "all"],
+  houses: ["registration", "houses"],
 };
 
-// GET /api/controller/microgrids
-export const useMicrogridsQuery = () => {
+// GET /api/houses - Get all houses (controller sees only their grid's houses)
+export const useHousesQuery = () => {
   return useQuery({
-    queryKey: REGISTRATION_KEYS.microgrids,
+    queryKey: REGISTRATION_KEYS.houses,
     queryFn: async () => {
-      console.log('🔍 [REGISTRATION] Fetching microgrids...');
-      const response = await api.get("/api/controller/microgrids");
-      console.log('✅ [REGISTRATION] Microgrids fetched:', response.data);
-      return response.data;
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2,
-  });
-};
-
-// GET /api/controller/houses
-export const useHousesQuery = (microgridId = null) => {
-  return useQuery({
-    queryKey: REGISTRATION_KEYS.houses(microgridId),
-    queryFn: async () => {
-      console.log('🔍 [REGISTRATION] Fetching houses...', microgridId ? `for microgrid: ${microgridId}` : 'all');
-      const params = microgridId ? { microgridId } : {};
-      const response = await api.get("/api/controller/houses", { params });
+      console.log('🔍 [REGISTRATION] Fetching houses...');
+      const response = await api.get("/api/houses");
       console.log('✅ [REGISTRATION] Houses fetched:', response.data);
       return response.data;
     },
@@ -39,50 +22,102 @@ export const useHousesQuery = (microgridId = null) => {
   });
 };
 
-// POST /api/controller/register/house
+// POST /api/houses - Create house
 export const useRegisterHouseApi = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (data) => {
       console.log('📤 [REGISTRATION] Registering house:', data);
-      const response = await api.post("/api/controller/register/house", data);
+      const response = await api.post("/api/houses", data);
       console.log('✅ [REGISTRATION] House registered:', response.data);
       return response.data;
     },
     onSuccess: () => {
       // Invalidate houses query to refetch
-      queryClient.invalidateQueries({ queryKey: ["registration", "houses"] });
+      queryClient.invalidateQueries({ queryKey: REGISTRATION_KEYS.houses });
     },
   });
 };
 
-// POST /api/controller/register/user
+// POST /api/users/consumer - Create consumer user
 export const useRegisterUserApi = () => {
+  const queryClient = useQueryClient();
+  
   return useMutation({
     mutationFn: async (data) => {
       console.log('📤 [REGISTRATION] Registering user:', { ...data, password: '***' });
-      const response = await api.post("/api/controller/register/user", data);
+      const response = await api.post("/api/users/consumer", data);
       console.log('✅ [REGISTRATION] User registered:', response.data);
       return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate houses query to refetch (in case house owner was updated)
+      queryClient.invalidateQueries({ queryKey: REGISTRATION_KEYS.houses });
     },
   });
 };
 
-// POST /api/controller/register/house-and-user
+// Combined: Create house then create consumer
 export const useRegisterHouseAndUserApi = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (data) => {
       console.log('📤 [REGISTRATION] Registering house and user:', { ...data, password: '***' });
-      const response = await api.post("/api/controller/register/house-and-user", data);
-      console.log('✅ [REGISTRATION] House and user registered:', response.data);
-      return response.data;
+      
+      try {
+        // Step 1: Create house
+        const houseData = {
+          address: data.houseAddress,
+          locationCoordinates: {
+            lat: parseFloat(data.latitude),
+            long: parseFloat(data.longitude)
+          }
+        };
+        
+        console.log('📤 [REGISTRATION] Step 1: Creating house...');
+        const houseResponse = await api.post("/api/houses", houseData);
+        console.log('✅ [REGISTRATION] House created:', houseResponse.data);
+        
+        if (!houseResponse.data?.success || !houseResponse.data?.data?.house?._id) {
+          throw new Error('House creation failed: Invalid response from server');
+        }
+        
+        const houseId = houseResponse.data.data.house._id;
+        console.log('📋 [REGISTRATION] House ID:', houseId);
+        
+        // Step 2: Create consumer with houseId
+        const consumerData = {
+          name: data.name,
+          email: data.email,
+          password: data.password,
+          phone: data.phone,
+          address: data.userAddress,
+          houseId: houseId
+        };
+        
+        console.log('📤 [REGISTRATION] Step 2: Creating consumer...');
+        const consumerResponse = await api.post("/api/users/consumer", consumerData);
+        console.log('✅ [REGISTRATION] Consumer created:', consumerResponse.data);
+        
+        if (!consumerResponse.data?.success) {
+          throw new Error(consumerResponse.data?.message || 'Consumer creation failed');
+        }
+        
+        return {
+          house: houseResponse.data.data.house,
+          consumer: consumerResponse.data.data.consumer
+        };
+      } catch (error) {
+        console.error('❌ [REGISTRATION] Error in registration flow:', error);
+        // Re-throw to let the component handle it
+        throw error;
+      }
     },
     onSuccess: () => {
       // Invalidate houses query to refetch
-      queryClient.invalidateQueries({ queryKey: ["registration", "houses"] });
+      queryClient.invalidateQueries({ queryKey: REGISTRATION_KEYS.houses });
     },
   });
 };

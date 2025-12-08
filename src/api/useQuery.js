@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ---- BASE URL ----
 let API_BASE_URL =
-  Constants.expoConfig?.extra?.API_URL || "http://10.64.241.212:3001";
+  Constants.expoConfig?.extra?.API_URL || "http://10.76.66.99:5000";
 
 // Remove trailing slash if present
 API_BASE_URL = API_BASE_URL.replace(/\/$/, "");

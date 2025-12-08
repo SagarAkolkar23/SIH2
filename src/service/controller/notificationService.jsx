@@ -1,62 +1,37 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../api/useQuery";
 
-// POST /api/controller/notifications/send
+// POST /api/notification/send-notification - Send notification to multiple consumers
 export const useSendNotificationApi = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (data) => {
       console.log('📤 [NOTIFICATION] Sending notification:', data);
-      const response = await api.post("/api/controller/notifications/send", data);
+      const response = await api.post("/api/notification/send-notification", data);
       console.log('✅ [NOTIFICATION] Notification sent:', response.data);
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate history query to refetch
-      queryClient.invalidateQueries({ queryKey: ["notifications", "history"] });
+      // Invalidate any notification-related queries if needed
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 };
 
-// GET /api/controller/notifications/stats/:microgridId
-export const useNotificationStatsQuery = (microgridId) => {
-  return useQuery({
-    queryKey: ["notification", "stats", microgridId],
-    queryFn: async () => {
-      if (!microgridId) return null;
-      const response = await api.get(`/api/controller/notifications/stats/${microgridId}`);
+// POST /api/notification/send-alert - Consumer sends alert to controller
+export const useSendAlertApi = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (data) => {
+      console.log('📤 [NOTIFICATION] Sending alert:', data);
+      const response = await api.post("/api/notification/send-alert", data);
+      console.log('✅ [NOTIFICATION] Alert sent:', response.data);
       return response.data;
     },
-    enabled: !!microgridId,
-    staleTime: 30 * 1000, // 30 seconds
-  });
-};
-
-// GET /api/controller/notifications/history
-export const useNotificationHistoryQuery = (microgridId = null, page = 1, limit = 50) => {
-  return useQuery({
-    queryKey: ["notifications", "history", microgridId, page, limit],
-    queryFn: async () => {
-      const params = { page, limit };
-      if (microgridId) {
-        params.microgridId = microgridId;
-      }
-      const response = await api.get("/api/controller/notifications/history", { params });
-      return response.data;
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
-    staleTime: 30 * 1000, // 30 seconds
-  });
-};
-
-// GET /api/controller/notifications/history/:notificationId
-export const useNotificationByIdQuery = (notificationId) => {
-  return useQuery({
-    queryKey: ["notifications", "history", notificationId],
-    queryFn: async () => {
-      const response = await api.get(`/api/controller/notifications/history/${notificationId}`);
-      return response.data;
-    },
-    enabled: !!notificationId,
   });
 };

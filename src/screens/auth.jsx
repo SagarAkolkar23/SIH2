@@ -35,27 +35,29 @@ export default function MicrogridLogin() {
       {
         onSuccess: (data) => {
           console.log('✅ [FRONTEND AUTH SCREEN] Login mutation onSuccess callback triggered');
-          console.log('📦 [FRONTEND AUTH SCREEN] Success data:', {
-            hasUser: !!data?.user,
-            userRole: data?.user?.role,
-          });
+          console.log('📦 [FRONTEND AUTH SCREEN] Success data:', data);
           
-          // Wait a bit for the store to update, then navigate
+          // Backend returns: { success: true, data: { user, token } }
+          // Auth service already saves to store, so we can get it directly
           setTimeout(() => {
             const currentUser = useAuthStore.getState().user;
-            const userRole = currentUser?.role || currentUser?.userType;
+            const userRole = currentUser?.role;
             
             console.log('👤 [FRONTEND AUTH SCREEN] Current user from store:', {
               email: currentUser?.email,
               role: userRole,
             });
             
-            if (userRole === "controller" || userRole === "admin") {
+            // Backend roles: SUPER_ADMIN, CONTROLLER, CONSUMER
+            if (userRole === "CONTROLLER" || userRole === "SUPER_ADMIN") {
               console.log('🧭 [FRONTEND AUTH SCREEN] Navigating to ControllerMain');
               navigation.replace("ControllerMain");
-            } else {
+            } else if (userRole === "CONSUMER") {
               console.log('🧭 [FRONTEND AUTH SCREEN] Navigating to UserMain');
               navigation.replace("UserMain");
+            } else {
+              console.error('❌ [FRONTEND AUTH SCREEN] Unknown role:', userRole);
+              setError("Unknown user role. Please contact administrator.");
             }
           }, 100);
         },
@@ -64,12 +66,14 @@ export default function MicrogridLogin() {
           console.error('📦 [FRONTEND AUTH SCREEN] Error object:', {
             message: err?.message,
             status: err?.response?.status,
-            error: err?.response?.data?.error,
+            error: err?.response?.data,
           });
           
-          const errorMessage = err?.response?.data?.error || 
+          // Backend returns: { success: false, message: "..." }
+          const errorMessage = err?.response?.data?.message || 
+                              err?.response?.data?.error || 
                               err?.message || 
-                              "Login failed";
+                              "Login failed. Please check your credentials.";
           console.log('📝 [FRONTEND AUTH SCREEN] Setting error message:', errorMessage);
           setError(errorMessage);
         },

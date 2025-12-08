@@ -1,6 +1,6 @@
 // src/screens/Dashboard.js
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, SafeAreaView, Platform, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, SafeAreaView, Platform } from "react-native";
 import {
   Zap,
   Activity,
@@ -16,7 +16,7 @@ import TopAppBar from "../../components/controller/TopAppBar";
 import { useThemeStore } from "../../store/themeStore";
 import ProfileModal from "../../components/users/ProfileModal";
 import RegistrationModal from "../../components/controller/RegistrationModal";
-import { useSolarReadings } from "../../service/controller/testGen";
+// import { useSolarReadings } from "../../service/controller/testGen"; // Commented out - using dummy data instead
 import { useFocusEffect } from "@react-navigation/native";
 import WeatherWidget from "../../components/controller/dashboard/WeatherWidget";
 
@@ -46,20 +46,12 @@ export default function Dashboard() {
     }, [])
   );
 
-  const { data: solarReadings, isLoading, isError } = useSolarReadings(true);
-  const latestReading = solarReadings?.[0]?.voltage ?? 0;
-
-const panelRatedPower = 10; // watts
-
-// Derived current from real voltage reading
-const calculatedCurrent =
-  latestReading > 0 ? panelRatedPower / latestReading : 0;
-
-// Add tiny randomness to simulate MPPT variation
-const simulatedCurrent = Number(
-  (calculatedCurrent * (0.95 + Math.random() * 0.1)).toFixed(2)
-);
-
+  // Dummy voltage data instead of backend
+  // const { data: solarReadings, isLoading, isError } = useSolarReadings(true);
+  // const latestReading = solarReadings?.[0]?.voltage ?? 0;
+  
+  // Using dummy voltage data (will be updated by useEffect)
+  const latestReading = data.voltage;
 
   // Simulated live data updates
   useEffect(() => {
@@ -308,28 +300,18 @@ const simulatedCurrent = Number(
         </Text>
 
         {/* Voltage Gauge */}
-        {/* Voltage Gauge Live From Backend */}
-        {isLoading ? (
-          <Text style={{ color: colors.textSecondary, marginBottom: 20 }}>
-            Loading live voltage...
-          </Text>
-        ) : isError ? (
-          <Text style={{ color: colors.error, marginBottom: 20 }}>
-            ⚠ Could not fetch live voltage
-          </Text>
-        ) : (
-          <IndustrialGauge
-            value={latestReading}
-            max={260} 
-            label="Grid Voltage"
-            unit="V"
-            icon={Zap}
-            lowWarning={200}
-            highWarning={250}
-            greenZoneStart={220}
-            greenZoneEnd={240}
-          />
-        )}
+        {/* Voltage Gauge with Dummy Data */}
+        <IndustrialGauge
+          value={latestReading}
+          max={260} 
+          label="Grid Voltage"
+          unit="V"
+          icon={Zap}
+          lowWarning={200}
+          highWarning={250}
+          greenZoneStart={220}
+          greenZoneEnd={240}
+        />
 
         {/* Current Gauge */}
         <IndustrialGauge

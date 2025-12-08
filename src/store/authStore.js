@@ -20,12 +20,24 @@ export const useAuthStore = create((set) => ({
   // Helper to get user role
   getUserRole: () => {
     const state = useAuthStore.getState();
-    return state.user?.role || state.user?.userType || null;
+    return state.user?.role || null;
   },
 
-  // Helper to check if user is controller
+  // Helper to check if user is controller or super admin
   isController: () => {
     const role = useAuthStore.getState().getUserRole();
-    return role === "controller" || role === "admin";
+    return role === "CONTROLLER" || role === "SUPER_ADMIN";
+  },
+
+  // Helper to check if user is consumer
+  isConsumer: () => {
+    const role = useAuthStore.getState().getUserRole();
+    return role === "CONSUMER";
+  },
+
+  // Helper to check if user is super admin
+  isSuperAdmin: () => {
+    const role = useAuthStore.getState().getUserRole();
+    return role === "SUPER_ADMIN";
   },
 }));
