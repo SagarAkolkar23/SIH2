@@ -58,29 +58,56 @@ export const useLogoutApi = () => {
   // Logout is handled client-side (backend has no logout endpoint)
   // JWT tokens are stateless, so we just clear local storage
   // But we should remove FCM token from backend before clearing auth
+  const performLogout = async () => {
+    const user = useAuthStore.getState().user;
+    
+    console.log('[LOGOUT] ========================================');
+    console.log('[LOGOUT] Starting logout process...');
+    console.log('[LOGOUT] User:', user?.email);
+    console.log('[LOGOUT] User Role:', user?.role);
+    console.log('[LOGOUT] User ID:', user?._id);
+
+    // Step 1: Remove FCM token from backend
+    console.log('[LOGOUT] Step 1: Removing FCM token from backend...');
+    try {
+      await removeTokenMutation.mutateAsync();
+      console.log('[LOGOUT] ✅ FCM token removed from backend');
+    } catch (error) {
+      console.log('[LOGOUT] ⚠️ Failed to remove FCM token from backend (non-blocking)');
+      console.log('[LOGOUT] Error:', error.message);
+      // Continue with logout even if token removal fails
+    }
+
+    // Step 2: Clear auth data (removes token and user from AsyncStorage and state)
+    console.log('[LOGOUT] Step 2: Clearing auth data...');
+    try {
+      await clearAuth();
+      console.log('[LOGOUT] ✅ Auth data cleared from AsyncStorage and state');
+    } catch (error) {
+      console.log('[LOGOUT] ❌ Error clearing auth data:', error.message);
+      // Still try to clear manually
+      try {
+        const AsyncStorage = await import('@react-native-async-storage/async-storage');
+        await AsyncStorage.default.removeItem("token");
+        await AsyncStorage.default.removeItem("user");
+        await AsyncStorage.default.removeItem("@fcm_token");
+        useAuthStore.setState({ token: null, user: null });
+        console.log('[LOGOUT] ✅ Auth data cleared manually');
+      } catch (manualError) {
+        console.log('[LOGOUT] ❌ Failed to clear auth data manually:', manualError.message);
+      }
+    }
+
+    console.log('[LOGOUT] ✅ Logout process completed');
+    console.log('[LOGOUT] ========================================');
+  };
+
   return {
     mutate: async () => {
-      // Remove FCM token from backend before clearing auth
-      // This is non-blocking - if it fails, we still proceed with logout
-      try {
-        await removeTokenMutation.mutateAsync();
-      } catch (error) {
-        // Silent fail - proceed with logout even if token removal fails
-      }
-      
-      // Clear auth data (removes token and user from AsyncStorage and state)
-      clearAuth();
+      await performLogout();
     },
     mutateAsync: async () => {
-      // Remove FCM token from backend before clearing auth
-      try {
-        await removeTokenMutation.mutateAsync();
-      } catch (error) {
-        // Silent fail - proceed with logout even if token removal fails
-      }
-      
-      // Clear auth data
-      clearAuth();
+      await performLogout();
       return Promise.resolve();
     },
   };

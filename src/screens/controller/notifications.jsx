@@ -202,6 +202,7 @@ export default function NotificationsScreen() {
             "Error",
             error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to send notification"
           );
+          console.log(error);
         },
       }
     );

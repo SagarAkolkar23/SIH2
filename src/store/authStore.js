@@ -12,9 +12,29 @@ export const useAuthStore = create((set) => ({
   },
 
   clearAuth: async () => {
-    await AsyncStorage.removeItem("token");
-    await AsyncStorage.removeItem("user");
-    set({ token: null, user: null });
+    try {
+      const currentUser = useAuthStore.getState().user;
+      console.log('[AUTH STORE] ========================================');
+      console.log('[AUTH STORE] Clearing auth data...');
+      console.log('[AUTH STORE] Current user:', currentUser?.email);
+      console.log('[AUTH STORE] Current role:', currentUser?.role);
+      
+      // Remove all auth-related items from AsyncStorage
+      await AsyncStorage.multiRemove(["token", "user", "@fcm_token"]);
+      console.log('[AUTH STORE] ✅ AsyncStorage cleared');
+      
+      // Clear state
+      set({ token: null, user: null });
+      console.log('[AUTH STORE] ✅ State cleared');
+      console.log('[AUTH STORE] ✅ Auth data cleared successfully');
+      console.log('[AUTH STORE] ========================================');
+    } catch (error) {
+      console.log('[AUTH STORE] ❌ Error clearing auth data:', error.message);
+      console.log('[AUTH STORE] Error details:', error);
+      // Still clear state even if AsyncStorage fails
+      set({ token: null, user: null });
+      console.log('[AUTH STORE] ✅ State cleared despite AsyncStorage error');
+    }
   },
 
   // Helper to get user role

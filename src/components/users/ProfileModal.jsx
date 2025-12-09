@@ -13,7 +13,6 @@ import {
 import { X, User, Mail, LogOut, Shield, Settings as SettingsIcon } from "lucide-react-native";
 import { useThemeStore } from "../../store/themeStore";
 import { useAuthStore } from "../../store/authStore";
-import { useNavigation } from "@react-navigation/native";
 import { useLogoutApi } from "../../service/authService";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -21,14 +20,33 @@ const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const ProfileModal = ({ visible, onClose }) => {
   const { colors, theme } = useThemeStore();
   const user = useAuthStore((state) => state.user);
-  const navigation = useNavigation();
   const logoutApi = useLogoutApi();
 
   const handleLogout = async () => {
-    // Use logout API which removes FCM token from backend and clears auth
-    await logoutApi.mutateAsync();
-    onClose();
-    navigation.replace("Login");
+    try {
+      console.log('[PROFILE MODAL] Logout button pressed');
+      console.log('[PROFILE MODAL] User:', user?.email);
+      console.log('[PROFILE MODAL] User Role:', user?.role);
+      
+      // Close modal first
+      onClose();
+      
+      // Use logout API which removes FCM token from backend and clears auth
+      // RootNavigator will automatically show Login screen when token becomes null
+      await logoutApi.mutateAsync();
+      
+      console.log('[PROFILE MODAL] ✅ Logout completed - RootNavigator will handle navigation');
+    } catch (error) {
+      console.log('[PROFILE MODAL] ❌ Error during logout:', error.message);
+      // Even if there's an error, try to clear auth state
+      // RootNavigator will handle navigation based on token state
+      try {
+        const { useAuthStore } = await import('../../store/authStore');
+        await useAuthStore.getState().clearAuth();
+      } catch (clearError) {
+        console.log('[PROFILE MODAL] Failed to clear auth:', clearError.message);
+      }
+    }
   };
 
   return (

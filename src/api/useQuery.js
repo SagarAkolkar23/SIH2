@@ -37,9 +37,25 @@ api.interceptors.request.use(async (config) => {
 // ---- RESPONSE INTERCEPTOR ----
 api.interceptors.response.use(
   (res) => {
+    // Only log FCM token related responses for debugging
+    if (res.config?.url?.includes('fcm-token')) {
+      console.log('[API RESPONSE] FCM Token endpoint response');
+      console.log('[API RESPONSE] URL:', res.config.url);
+      console.log('[API RESPONSE] Status:', res.status);
+      console.log('[API RESPONSE] Data:', res.data);
+    }
     return res;
   },
   async (err) => {
+    // Log errors for FCM token endpoint
+    if (err.config?.url?.includes('fcm-token')) {
+      console.log('[API ERROR] FCM Token endpoint error');
+      console.log('[API ERROR] URL:', err.config.url);
+      console.log('[API ERROR] Status:', err.response?.status);
+      console.log('[API ERROR] Data:', err.response?.data);
+      console.log('[API ERROR] Message:', err.message);
+    }
+    
     if (err.response?.status === 401) {
       // On 401 (unauthorized), remove FCM token and clear auth
       // Try to remove FCM token from backend (non-blocking)

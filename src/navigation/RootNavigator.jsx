@@ -44,7 +44,13 @@ export default function RootNavigator() {
   const user = useAuthStore((state) => state.user);
   const setAuthData = useAuthStore((state) => state.setAuthData);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Always call hooks in the same order - don't conditionally call hooks
   const { initializeAndRegister } = useInitializeAndRegisterFCM();
+
+  // Determine if user is controller (backend roles: SUPER_ADMIN, CONTROLLER, CONSUMER)
+  const userRole = user?.role;
+  const isController = userRole === "CONTROLLER" || userRole === "SUPER_ADMIN";
 
   // Load auth state from AsyncStorage on app start
   useEffect(() => {
@@ -74,13 +80,22 @@ export default function RootNavigator() {
     if (token && user) {
       // Initialize and register FCM token in background
       // This is non-blocking and will fail silently if permissions are denied
-      initializeAndRegister();
+      initializeAndRegister().catch((error) => {
+        // Silent fail - FCM initialization should not block app
+      });
     }
   }, [token, user, initializeAndRegister]);
 
-  // Determine if user is controller (backend roles: SUPER_ADMIN, CONTROLLER, CONSUMER)
-  const userRole = user?.role;
-  const isController = userRole === "CONTROLLER" || userRole === "SUPER_ADMIN";
+  // Log navigation state for debugging
+  useEffect(() => {
+    if (!isLoading) {
+      console.log('[ROOT NAVIGATOR] Navigation state updated');
+      console.log('[ROOT NAVIGATOR] Has token:', !!token);
+      console.log('[ROOT NAVIGATOR] User role:', userRole);
+      console.log('[ROOT NAVIGATOR] Is controller:', isController);
+      console.log('[ROOT NAVIGATOR] Showing:', !token ? 'Login' : isController ? 'ControllerMain' : 'UserMain');
+    }
+  }, [token, userRole, isController, isLoading]);
 
   if (isLoading) {
     // Return a loading screen while checking auth
