@@ -29,11 +29,10 @@ import {
 } from "lucide-react-native";
 import TopAppBar from "../../components/controller/TopAppBar";
 import { useThemeStore } from "../../store/themeStore";
-import { useMicrogridsQuery } from "../../service/controller/registrationService";
-import { useSendNotificationApi, useNotificationStatsQuery, useNotificationHistoryQuery } from "../../service/controller/notificationService";
+import { useMicrogridsQuery, useSendNotificationApi, useNotificationStatsQuery, useNotificationHistoryQuery } from "../../service/controller/notificationService";
 
 export default function NotificationsScreen() {
-  const { colors } = useThemeStore();
+  const { colors, theme } = useThemeStore();
   const [showForm, setShowForm] = useState(false);
   const [selectedNotif, setSelectedNotif] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -82,11 +81,11 @@ export default function NotificationsScreen() {
   // Map notification types to icons and colors
   const getNotificationType = (type, priority) => {
     const types = {
-      maintenance: { icon: AlertTriangle, color: "#f59e0b", category: "MAINTENANCE" },
-      alert: { icon: AlertTriangle, color: "#ef4444", category: "ALERT" },
-      success: { icon: CheckCircle, color: "#22c55e", category: "SUCCESS" },
-      warning: { icon: AlertTriangle, color: "#f59e0b", category: "WARNING" },
-      info: { icon: Zap, color: "#3b82f6", category: "NOTIFICATION" },
+      maintenance: { icon: AlertTriangle, color: colors.warning, category: "MAINTENANCE" },
+      alert: { icon: AlertTriangle, color: colors.error, category: "ALERT" },
+      success: { icon: CheckCircle, color: colors.success, category: "SUCCESS" },
+      warning: { icon: AlertTriangle, color: colors.warning, category: "WARNING" },
+      info: { icon: Zap, color: colors.accent, category: "NOTIFICATION" },
     };
 
     return types[type] || types.info;
@@ -122,7 +121,7 @@ export default function NotificationsScreen() {
   };
 
   // Convert API notifications to display format
-  const notifications = historyData?.notifications?.map(notif => {
+  const notifications = historyData?.data?.notifications?.map(notif => {
     const typeConfig = getNotificationType(notif.notificationType, notif.priority);
     return {
       id: notif.id,
@@ -153,19 +152,18 @@ export default function NotificationsScreen() {
   const getTheme = (type) => {
     switch (type) {
       case "maintenance":
-        return { main: "#f59e0b", bg: "rgba(245, 158, 11, 0.1)" };
+        return { main: colors.warning, bg: colors.warning + "20" };
       case "success":
-        return { main: "#22c55e", bg: "rgba(34, 197, 94, 0.1)" };
+        return { main: colors.success, bg: colors.success + "20" };
       case "power":
-        return { main: "#ef4444", bg: "rgba(239, 68, 68, 0.1)" };
+        return { main: colors.error, bg: colors.error + "20" };
       default:
-        return { main: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" };
+        return { main: colors.accent, bg: colors.accent + "20" };
     }
   };
 
   const handleSubmit = () => {
     if (!formData.heading || !formData.message) return;
-    console.log("Posted:", formData);
     setShowForm(false);
   };
 
@@ -177,15 +175,15 @@ export default function NotificationsScreen() {
 
     sendNotificationMutation.mutate(
       {
-        microgridId: selectedMicrogridId,
+        gridId: selectedMicrogridId, // Use gridId to match backend
         title: notificationTitle.trim(),
-        message: notificationMessage.trim(),
+        body: notificationMessage.trim(), // Use body to match backend
       },
       {
         onSuccess: (data) => {
           Alert.alert(
             "Success",
-            `Notification sent successfully to ${data.stats.usersCount} users!`,
+            `Notification sent successfully to ${data.data?.stats?.totalRecipients || data.stats?.totalRecipients || 0} users!`,
             [
               {
                 text: "OK",
@@ -202,7 +200,7 @@ export default function NotificationsScreen() {
         onError: (error) => {
           Alert.alert(
             "Error",
-            error?.response?.data?.error || "Failed to send notification"
+            error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to send notification"
           );
         },
       }
@@ -400,13 +398,13 @@ export default function NotificationsScreen() {
           alignItems: "center",
           justifyContent: "center",
           elevation: 6,
-          shadowColor: "#000",
+          shadowColor: colors.border,
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.25,
           shadowRadius: 4,
         }}
       >
-        <Send size={28} color="#fff" />
+        <Send size={28} color={colors.textPrimary} />
       </TouchableOpacity>
 
       {/* NOTIFICATION COMPOSER MODAL */}
@@ -420,7 +418,7 @@ export default function NotificationsScreen() {
         <View
           style={{
             flex: 1,
-            backgroundColor: "rgba(0,0,0,0.6)",
+            backgroundColor: theme === "dark" ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.4)",
             justifyContent: "flex-end",
           }}
         >
@@ -509,28 +507,28 @@ export default function NotificationsScreen() {
                       Loading microgrids...
                     </Text>
                   </View>
-                ) : microgridsData?.microgrids && microgridsData.microgrids.length > 0 ? (
+                ) : microgridsData?.data?.grids && microgridsData.data.grids.length > 0 ? (
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={{ marginTop: 8 }}
                   >
-                    {microgridsData.microgrids.map((mg) => (
+                    {microgridsData.data.grids.map((grid) => (
                       <TouchableOpacity
-                        key={mg.id}
-                        onPress={() => setSelectedMicrogridId(mg.id)}
+                        key={grid._id}
+                        onPress={() => setSelectedMicrogridId(grid._id)}
                         style={{
                           paddingHorizontal: 16,
                           paddingVertical: 12,
                           borderRadius: 12,
                           marginRight: 8,
                           backgroundColor:
-                            selectedMicrogridId === mg.id
+                            selectedMicrogridId === grid._id
                               ? colors.success
                               : colors.surfaceSecondary,
                           borderWidth: 1,
                           borderColor:
-                            selectedMicrogridId === mg.id
+                            selectedMicrogridId === grid._id
                               ? colors.success
                               : colors.border,
                         }}
@@ -538,14 +536,14 @@ export default function NotificationsScreen() {
                         <Text
                           style={{
                             color:
-                              selectedMicrogridId === mg.id
-                                ? "#fff"
+                              selectedMicrogridId === grid._id
+                                ? colors.textPrimary
                                 : colors.textPrimary,
                             fontSize: 13,
                             fontWeight: "600",
                           }}
                         >
-                          {mg.name}
+                          {grid.gridAddress || grid._id}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -558,12 +556,12 @@ export default function NotificationsScreen() {
                       fontStyle: "italic",
                     }}
                   >
-                    No microgrids available
+                    No grids available
                   </Text>
                 )}
 
                 {/* Stats Preview */}
-                {statsData && selectedMicrogridId && (
+                {statsData?.data?.stats && selectedMicrogridId && (
                   <View
                     style={{
                       marginTop: 12,
@@ -600,11 +598,11 @@ export default function NotificationsScreen() {
                         marginLeft: 24,
                       }}
                     >
-                      {statsData.stats.housesCount} houses •{" "}
-                      {statsData.stats.usersWithTokens} users will receive this
+                      {statsData.data.stats.housesCount} houses •{" "}
+                      {statsData.data.stats.usersWithTokens} users will receive this
                       notification
                     </Text>
-                    {statsData.stats.usersWithoutTokens > 0 && (
+                    {statsData.data.stats.usersWithoutTokens > 0 && (
                       <Text
                         style={{
                           color: colors.warning,
@@ -613,7 +611,7 @@ export default function NotificationsScreen() {
                           marginTop: 4,
                         }}
                       >
-                        ⚠️ {statsData.stats.usersWithoutTokens} users don't have
+                        ⚠️ {statsData.data.stats.usersWithoutTokens} users don't have
                         push notifications enabled
                       </Text>
                     )}
@@ -734,12 +732,12 @@ export default function NotificationsScreen() {
                 activeOpacity={0.7}
               >
                 {sendNotificationMutation.isPending && (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
                 )}
-                <Send size={18} color="#fff" />
+                <Send size={18} color={colors.textPrimary} />
                 <Text
                   style={{
-                    color: "#fff",
+                    color: colors.textPrimary,
                     fontSize: 16,
                     fontWeight: "700",
                   }}
@@ -757,14 +755,14 @@ export default function NotificationsScreen() {
       {/* DETAIL MODAL */}
       {selectedNotif && (
         <Modal transparent animationType="fade">
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.85)",
-              justifyContent: "center",
-              padding: 20,
-            }}
-          >
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: theme === "dark" ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,0.5)",
+                justifyContent: "center",
+                padding: 20,
+              }}
+            >
             <View
               style={{
                 backgroundColor: colors.surface,
@@ -816,7 +814,7 @@ export default function NotificationsScreen() {
                   style={{
                     textAlign: "center",
                     fontWeight: "bold",
-                    color: "#fff",
+                    color: colors.textPrimary,
                   }}
                 >
                   Close

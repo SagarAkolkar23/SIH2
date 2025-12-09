@@ -1,5 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "../../api/useQuery";
+import { api } from "../../api/useQuery";
+
+/**
+ * Registration Service for Controllers
+ * 
+ * This service provides hooks for controllers to:
+ * 1. Create houses (POST /api/houses)
+ *    - Controllers can only create houses in their assigned grid
+ *    - Backend automatically uses controller's gridId
+ * 
+ * 2. Create consumer users (POST /api/users/consumer)
+ *    - Controllers can only create consumers for houses in their grid
+ *    - Requires: name, email, password, phone, address, houseId
+ * 
+ * 3. Combined registration (house + user)
+ *    - Creates house first, then creates consumer linked to that house
+ *    - Used for registering new consumers with new houses
+ * 
+ * All endpoints require authentication and proper authorization.
+ * Error handling extracts messages from backend responses.
+ */
 
 // Query Keys
 const REGISTRATION_KEYS = {
@@ -11,9 +31,7 @@ export const useHousesQuery = () => {
   return useQuery({
     queryKey: REGISTRATION_KEYS.houses,
     queryFn: async () => {
-      console.log('🔍 [REGISTRATION] Fetching houses...');
       const response = await api.get("/api/houses");
-      console.log('✅ [REGISTRATION] Houses fetched:', response.data);
       return response.data;
     },
     enabled: true, // Always enabled
@@ -28,10 +46,17 @@ export const useRegisterHouseApi = () => {
   
   return useMutation({
     mutationFn: async (data) => {
-      console.log('📤 [REGISTRATION] Registering house:', data);
-      const response = await api.post("/api/houses", data);
-      console.log('✅ [REGISTRATION] House registered:', response.data);
-      return response.data;
+      try {
+        const response = await api.post("/api/houses", data);
+        return response.data;
+      } catch (error) {
+        // Extract error message from response
+        const errorMessage = error?.response?.data?.message || 
+                           error?.response?.data?.error || 
+                           error?.message || 
+                           'Failed to register house';
+        throw new Error(errorMessage);
+      }
     },
     onSuccess: () => {
       // Invalidate houses query to refetch
@@ -46,10 +71,17 @@ export const useRegisterUserApi = () => {
   
   return useMutation({
     mutationFn: async (data) => {
-      console.log('📤 [REGISTRATION] Registering user:', { ...data, password: '***' });
-      const response = await api.post("/api/users/consumer", data);
-      console.log('✅ [REGISTRATION] User registered:', response.data);
-      return response.data;
+      try {
+        const response = await api.post("/api/users/consumer", data);
+        return response.data;
+      } catch (error) {
+        // Extract error message from response
+        const errorMessage = error?.response?.data?.message || 
+                           error?.response?.data?.error || 
+                           error?.message || 
+                           'Failed to register user';
+        throw new Error(errorMessage);
+      }
     },
     onSuccess: () => {
       // Invalidate houses query to refetch (in case house owner was updated)
@@ -64,8 +96,6 @@ export const useRegisterHouseAndUserApi = () => {
   
   return useMutation({
     mutationFn: async (data) => {
-      console.log('📤 [REGISTRATION] Registering house and user:', { ...data, password: '***' });
-      
       try {
         // Step 1: Create house
         const houseData = {
@@ -76,16 +106,13 @@ export const useRegisterHouseAndUserApi = () => {
           }
         };
         
-        console.log('📤 [REGISTRATION] Step 1: Creating house...');
         const houseResponse = await api.post("/api/houses", houseData);
-        console.log('✅ [REGISTRATION] House created:', houseResponse.data);
         
         if (!houseResponse.data?.success || !houseResponse.data?.data?.house?._id) {
           throw new Error('House creation failed: Invalid response from server');
         }
         
         const houseId = houseResponse.data.data.house._id;
-        console.log('📋 [REGISTRATION] House ID:', houseId);
         
         // Step 2: Create consumer with houseId
         const consumerData = {
@@ -97,9 +124,7 @@ export const useRegisterHouseAndUserApi = () => {
           houseId: houseId
         };
         
-        console.log('📤 [REGISTRATION] Step 2: Creating consumer...');
         const consumerResponse = await api.post("/api/users/consumer", consumerData);
-        console.log('✅ [REGISTRATION] Consumer created:', consumerResponse.data);
         
         if (!consumerResponse.data?.success) {
           throw new Error(consumerResponse.data?.message || 'Consumer creation failed');
@@ -110,9 +135,12 @@ export const useRegisterHouseAndUserApi = () => {
           consumer: consumerResponse.data.data.consumer
         };
       } catch (error) {
-        console.error('❌ [REGISTRATION] Error in registration flow:', error);
-        // Re-throw to let the component handle it
-        throw error;
+        // Extract error message from response
+        const errorMessage = error?.response?.data?.message || 
+                           error?.response?.data?.error || 
+                           error?.message || 
+                           'Failed to register house and user';
+        throw new Error(errorMessage);
       }
     },
     onSuccess: () => {

@@ -21,6 +21,7 @@ import FilterSummaryCard from "../../components/controller/history/FilterSummary
 import ActionButtonsRow from "../../components/controller/history/ActionButtonsRow";
 import HistoryChartCard from "../../components/controller/history/HistoryChartCard";
 import DownloadButton from "../../components/controller/history/DownloadButton";
+import { useThemeStore } from "../../store/themeStore";
 
 // Generate mock historical data
 const generateHistoricalData = () => {
@@ -57,6 +58,7 @@ const generateHistoricalData = () => {
 };
 
 export default function History() {
+  const { colors } = useThemeStore();
   const [dateFilter, setDateFilter] = useState("last7days");
   const [areaFilter, setAreaFilter] = useState("all");
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -225,15 +227,22 @@ export default function History() {
 
   // Chart configurations for different colors
   const baseChartConfig = {
-    backgroundColor: "#1a1a1a",
-    backgroundGradientFrom: "#1a1a1a",
-    backgroundGradientTo: "#0a0a0a",
+    backgroundColor: colors.chartBackground,
+    backgroundGradientFrom: colors.chartGradientFrom,
+    backgroundGradientTo: colors.chartGradientTo,
     decimalPlaces: 1,
-    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+    labelColor: (opacity = 1) => {
+      // Convert hex to rgba for label color
+      const hex = colors.textTertiary.replace('#', '');
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    },
     style: { borderRadius: 16 },
     propsForBackgroundLines: {
       strokeDasharray: "",
-      stroke: "#333",
+      stroke: colors.border,
       strokeWidth: 1,
     },
   };
@@ -249,7 +258,7 @@ export default function History() {
   });
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0a" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <TopAppBar
         title="Data History"
         systemStatus="OPERATIONAL"
@@ -279,7 +288,7 @@ export default function History() {
         {/* Section Header */}
         <Text
           style={{
-            color: "#6b7280",
+            color: colors.textTertiary,
             fontSize: 11,
             fontWeight: "700",
             letterSpacing: 1.5,
@@ -351,17 +360,17 @@ export default function History() {
         {/* Info Footer */}
         <View
           style={{
-            backgroundColor: "#1a1a1a",
+            backgroundColor: colors.surface,
             borderRadius: 12,
             padding: 14,
             borderWidth: 1,
-            borderColor: "#333",
+            borderColor: colors.border,
             marginBottom: 20,
           }}
         >
           <Text
             style={{
-              color: "#6b7280",
+              color: colors.textTertiary,
               fontSize: 11,
               textAlign: "center",
               lineHeight: 18,

@@ -2,6 +2,7 @@
 import React from "react";
 import { View, Text, Dimensions } from "react-native";
 import { LineChart } from "react-native-chart-kit";
+import { useThemeStore } from "../../../store/themeStore";
 
 export default function HistoryChartCard({
   title,
@@ -11,6 +12,7 @@ export default function HistoryChartCard({
   color,
   chartConfig,
 }) {
+  const { colors } = useThemeStore();
   const screenWidth = Dimensions.get("window").width;
 
   const avg =
@@ -26,12 +28,12 @@ export default function HistoryChartCard({
   return (
     <View
       style={{
-        backgroundColor: "#1a1a1a",
+        backgroundColor: colors.surface,
         borderRadius: 16,
         padding: 16,
         marginBottom: 16,
         borderWidth: 2,
-        borderColor: "#333",
+        borderColor: colors.border,
       }}
     >
       {/* Card Header */}
@@ -56,7 +58,7 @@ export default function HistoryChartCard({
         <View style={{ flex: 1 }}>
           <Text
             style={{
-              color: "#e5e7eb",
+              color: colors.textPrimary,
               fontSize: 15,
               fontWeight: "700",
               letterSpacing: 0.5,
@@ -64,7 +66,7 @@ export default function HistoryChartCard({
           >
             {title}
           </Text>
-          <Text style={{ color: "#6b7280", fontSize: 11, marginTop: 2 }}>
+          <Text style={{ color: colors.textTertiary, fontSize: 11, marginTop: 2 }}>
             {data.labels.length} data points • {unit}
           </Text>
         </View>
@@ -98,35 +100,35 @@ export default function HistoryChartCard({
               marginTop: 12,
               paddingTop: 12,
               borderTopWidth: 1,
-              borderTopColor: "#333",
+              borderTopColor: colors.border,
             }}
           >
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#6b7280", fontSize: 10 }}>AVG</Text>
+              <Text style={{ color: colors.textTertiary, fontSize: 10 }}>AVG</Text>
               <Text style={{ color: color, fontSize: 18, fontWeight: "700" }}>
                 {avg}
               </Text>
-              <Text style={{ color: "#6b7280", fontSize: 10 }}>{unit}</Text>
+              <Text style={{ color: colors.textTertiary, fontSize: 10 }}>{unit}</Text>
             </View>
 
             <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={{ color: "#6b7280", fontSize: 10 }}>PEAK</Text>
+              <Text style={{ color: colors.textTertiary, fontSize: 10 }}>PEAK</Text>
               <Text
-                style={{ color: "#22c55e", fontSize: 18, fontWeight: "700" }}
+                style={{ color: colors.success, fontSize: 18, fontWeight: "700" }}
               >
                 {peak}
               </Text>
-              <Text style={{ color: "#6b7280", fontSize: 10 }}>{unit}</Text>
+              <Text style={{ color: colors.textTertiary, fontSize: 10 }}>{unit}</Text>
             </View>
 
             <View style={{ flex: 1, alignItems: "flex-end" }}>
-              <Text style={{ color: "#6b7280", fontSize: 10 }}>LOW</Text>
+              <Text style={{ color: colors.textTertiary, fontSize: 10 }}>LOW</Text>
               <Text
-                style={{ color: "#f59e0b", fontSize: 18, fontWeight: "700" }}
+                style={{ color: colors.warning, fontSize: 18, fontWeight: "700" }}
               >
                 {low}
               </Text>
-              <Text style={{ color: "#6b7280", fontSize: 10 }}>{unit}</Text>
+              <Text style={{ color: colors.textTertiary, fontSize: 10 }}>{unit}</Text>
             </View>
           </View>
         </View>
@@ -136,13 +138,13 @@ export default function HistoryChartCard({
             height: 220,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#0a0a0a",
+            backgroundColor: colors.surfaceSecondary,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: "#333",
+            borderColor: colors.border,
           }}
         >
-          <Text style={{ color: "#6b7280", fontSize: 14 }}>
+          <Text style={{ color: colors.textTertiary, fontSize: 14 }}>
             No data available
           </Text>
         </View>

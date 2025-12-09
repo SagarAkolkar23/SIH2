@@ -14,17 +14,19 @@ import { X, User, Mail, LogOut, Shield, Settings as SettingsIcon } from "lucide-
 import { useThemeStore } from "../../store/themeStore";
 import { useAuthStore } from "../../store/authStore";
 import { useNavigation } from "@react-navigation/native";
+import { useLogoutApi } from "../../service/authService";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ProfileModal = ({ visible, onClose }) => {
-  const { colors } = useThemeStore();
+  const { colors, theme } = useThemeStore();
   const user = useAuthStore((state) => state.user);
-  const clearAuth = useAuthStore((state) => state.clearAuth);
   const navigation = useNavigation();
+  const logoutApi = useLogoutApi();
 
-  const handleLogout = () => {
-    clearAuth();
+  const handleLogout = async () => {
+    // Use logout API which removes FCM token from backend and clears auth
+    await logoutApi.mutateAsync();
     onClose();
     navigation.replace("Login");
   };
@@ -40,7 +42,7 @@ const ProfileModal = ({ visible, onClose }) => {
       <View 
         style={{ 
           flex: 1, 
-          backgroundColor: "rgba(0,0,0,0.6)",
+          backgroundColor: theme === "dark" ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.4)",
           justifyContent: "flex-end",
         }}
       >

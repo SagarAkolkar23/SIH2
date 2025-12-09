@@ -41,9 +41,21 @@ api.interceptors.response.use(
   },
   async (err) => {
     if (err.response?.status === 401) {
+      // On 401 (unauthorized), remove FCM token and clear auth
+      // Try to remove FCM token from backend (non-blocking)
+      try {
+        await api.put('/api/profile/fcm-token', { fcmToken: null });
+      } catch (error) {
+        // Silent fail - proceed with logout even if token removal fails
+      }
+      
+      // Clear auth data
       useAuthStore.getState().clearAuth();
       await AsyncStorage.removeItem("token");
       await AsyncStorage.removeItem("user");
+      
+      // Remove FCM token from local storage
+      await AsyncStorage.removeItem("@fcm_token");
     }
     return Promise.reject(err);
   }
@@ -54,15 +66,58 @@ export const useCustomQuery = (options) => {
   return useQuery({
     ...options,
     queryFn: async () => {
-      const requestConfig = options.queryFn();
-      
-      // Ensure URL starts with /
-      if (requestConfig.url && !requestConfig.url.startsWith('/')) {
-        requestConfig.url = '/' + requestConfig.url;
+      // Call the original queryFn and await it (in case it's async)
+      let requestConfig;
+      try {
+        requestConfig = await options.queryFn();
+      } catch (error) {
+        throw error;
       }
       
-      const res = await api(requestConfig);
-      return res.data;
+      // Validate requestConfig is an object
+      if (!requestConfig || typeof requestConfig !== 'object') {
+        throw new Error('Request config must be an object');
+      }
+      
+      // Extract URL from requestConfig
+      const url = requestConfig.url;
+      
+      // Validate URL exists
+      if (!url) {
+        throw new Error('Request URL is missing');
+      }
+      
+      // Ensure URL is a string
+      if (typeof url !== 'string') {
+        throw new Error(`Request URL must be a string, got ${typeof url}`);
+      }
+      
+      // Ensure URL starts with /
+      const urlPath = url.startsWith('/') ? url : `/${url}`;
+
+      const requestUrl = `${api.defaults.baseURL}${urlPath}`;
+      
+      // Validate final URL
+      if (requestUrl.includes('undefined') || requestUrl.includes('null')) {
+        throw new Error(`Malformed request URL: ${requestUrl}`);
+      }
+      
+      try {
+        // Create validated config with proper URL
+        const validatedConfig = {
+          method: requestConfig.method || 'GET',
+          url: urlPath,
+          ...(requestConfig.params && { params: requestConfig.params }),
+          ...(requestConfig.data && { data: requestConfig.data }),
+          ...(requestConfig.headers && { headers: requestConfig.headers })
+        };
+
+        const res = await api(validatedConfig);
+        
+        return res.data;
+      } catch (error) {
+        throw error;
+      }
     },
   });
 };

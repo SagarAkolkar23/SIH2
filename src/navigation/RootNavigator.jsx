@@ -7,6 +7,8 @@ import { useThemeStore } from "../store/themeStore";
 import Login from "../screens/auth";
 import ControllerBottomTabs from "./BottomTabs";
 import UserBottomTabs from "./UserBottomTabs";
+import NotificationHandler from "../components/NotificationHandler";
+import { useInitializeAndRegisterFCM } from "../service/userNotificationService";
 
 const Stack = createNativeStackNavigator();
 
@@ -42,6 +44,7 @@ export default function RootNavigator() {
   const user = useAuthStore((state) => state.user);
   const setAuthData = useAuthStore((state) => state.setAuthData);
   const [isLoading, setIsLoading] = useState(true);
+  const { initializeAndRegister } = useInitializeAndRegisterFCM();
 
   // Load auth state from AsyncStorage on app start
   useEffect(() => {
@@ -57,7 +60,7 @@ export default function RootNavigator() {
           });
         }
       } catch (error) {
-        console.error("Error loading auth state:", error);
+        // Error loading auth state
       } finally {
         setIsLoading(false);
       }
@@ -65,6 +68,15 @@ export default function RootNavigator() {
 
     loadAuthState();
   }, [setAuthData]);
+
+  // Register FCM token when user is authenticated
+  useEffect(() => {
+    if (token && user) {
+      // Initialize and register FCM token in background
+      // This is non-blocking and will fail silently if permissions are denied
+      initializeAndRegister();
+    }
+  }, [token, user, initializeAndRegister]);
 
   // Determine if user is controller (backend roles: SUPER_ADMIN, CONTROLLER, CONSUMER)
   const userRole = user?.role;
@@ -76,17 +88,22 @@ export default function RootNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!token ? (
-        // Not authenticated - show login
-        <Stack.Screen name="Login" component={Login} />
-      ) : isController ? (
-        // Controller user - show controller navigation
-        <Stack.Screen name="ControllerMain" component={ControllerBottomTabs} />
-      ) : (
-        // Regular user - show user navigation
-        <Stack.Screen name="UserMain" component={UserBottomTabs} />
-      )}
-    </Stack.Navigator>
+    <>
+      {/* Notification Handler - handles incoming notifications */}
+      {token && <NotificationHandler />}
+      
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!token ? (
+          // Not authenticated - show login
+          <Stack.Screen name="Login" component={Login} />
+        ) : isController ? (
+          // Controller user - show controller navigation
+          <Stack.Screen name="ControllerMain" component={ControllerBottomTabs} />
+        ) : (
+          // Regular user - show user navigation
+          <Stack.Screen name="UserMain" component={UserBottomTabs} />
+        )}
+      </Stack.Navigator>
+    </>
   );
 }

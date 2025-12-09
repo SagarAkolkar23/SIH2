@@ -146,7 +146,7 @@ const UserTopAppBar = ({
                   >
                     <Text
                       style={{
-                        color: "#fff",
+                        color: colors.textPrimary,
                         fontSize: 9,
                         fontWeight: "700",
                       }}

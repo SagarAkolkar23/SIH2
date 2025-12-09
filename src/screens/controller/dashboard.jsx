@@ -1,6 +1,6 @@
 // src/screens/Dashboard.js
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, SafeAreaView, Platform } from "react-native";
+import { View, Text, ScrollView, SafeAreaView, Platform, ActivityIndicator } from "react-native";
 import {
   Zap,
   Activity,
@@ -14,25 +14,63 @@ import IndustrialBattery from "../../components/controller/dashboard/IndustrialB
 import IndustrialStatusPanel from "../../components/controller/dashboard/IndustrialStatusPanel";
 import TopAppBar from "../../components/controller/TopAppBar";
 import { useThemeStore } from "../../store/themeStore";
+import { useAuthStore } from "../../store/authStore";
 import ProfileModal from "../../components/users/ProfileModal";
 import RegistrationModal from "../../components/controller/RegistrationModal";
-// import { useSolarReadings } from "../../service/controller/testGen"; // Commented out - using dummy data instead
+import { useLiveTelemetry } from "../../service/controller/telemetryService";
 import { useFocusEffect } from "@react-navigation/native";
 import WeatherWidget from "../../components/controller/dashboard/WeatherWidget";
 
 export default function Dashboard() {
   const { colors } = useThemeStore();
-  const [data, setData] = useState({
-    voltage: 230,
-    current: 11.8,
-    battery: 62,
-    temp: 41,
-    solarInput: 2650,
-    lastUpdated: new Date(),
-  });
+  const { user } = useAuthStore();
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [registrationModalVisible, setRegistrationModalVisible] = useState(false);
   const [isWeatherExpanded, setIsWeatherExpanded] = useState(false);
+  
+  // Get gridId from user (controller's assigned grid)
+  // gridId can be either a string (ObjectId) or an object (populated from backend)
+  const gridIdRaw = user?.gridId;
+  const gridId = gridIdRaw 
+    ? (typeof gridIdRaw === 'object' && gridIdRaw._id 
+        ? String(gridIdRaw._id) 
+        : String(gridIdRaw))
+    : null;
+  
+  // Fetch live telemetry data every 3.9 seconds
+  const { 
+    data: telemetryResponse, 
+    isLoading, 
+    error,
+    isFetching 
+  } = useLiveTelemetry({ 
+    deviceId: gridId || undefined, // Use extracted gridId string
+    enabled: !!gridId // Only fetch if gridId is available
+  });
+
+  // Extract telemetry data
+  const telemetry = telemetryResponse?.data?.generation;
+  
+  // Map telemetry data to dashboard format with fallbacks
+  const voltage = telemetry?.incomingVoltage ?? 0;
+  const generation = telemetry?.generation ?? 0; // kW
+  const consumption = telemetry?.consumption ?? 0; // kW
+  const battery = telemetry?.batteryPercentage ?? 0;
+  const temp = telemetry?.temperature ?? 0;
+  const inverterStatus = telemetry?.inverterStatus ?? 'OFF';
+  const coolingStatus = telemetry?.coolingStatus ?? false;
+  const lastUpdated = telemetry?.timestamp ? new Date(telemetry.timestamp) : new Date();
+  
+  // Calculate current from voltage and generation (if voltage > 0)
+  // Current (A) = Power (W) / Voltage (V)
+  // Generation is in kW, so multiply by 1000 to get Watts
+  const current = voltage > 0 ? (generation * 1000) / voltage : 0;
+  
+  // Solar input is generation in kW converted to Watts
+  const solarInput = generation * 1000; // Convert kW to W
+  
+  // Total power (generation - consumption for net power)
+  const powerKW = generation; // Use generation as plant power
   
   const handleWeatherToggle = () => {
     setIsWeatherExpanded(!isWeatherExpanded);
@@ -45,38 +83,15 @@ export default function Dashboard() {
       setIsWeatherExpanded(false);
     }, [])
   );
-
-  // Dummy voltage data instead of backend
-  // const { data: solarReadings, isLoading, isError } = useSolarReadings(true);
-  // const latestReading = solarReadings?.[0]?.voltage ?? 0;
-  
-  // Using dummy voltage data (will be updated by useEffect)
-  const latestReading = data.voltage;
-
-  // Simulated live data updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setData((prev) => ({
-        voltage: 220 + Math.floor(Math.random() * 25),
-        current: 8 + Math.random() * 7,
-        battery: Math.min(prev.battery + 0.1, 100),
-        temp: 36 + Math.floor(Math.random() * 10),
-        solarInput: 2400 + Math.floor(Math.random() * 250),
-        lastUpdated: new Date(),
-      }));
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const powerKW = (data.voltage * data.current) / 1000;
   
 
-  // System status logic
+  // System status logic based on telemetry data
   const systemStatus = (() => {
-    if (data.voltage < 200 || data.voltage > 250) return "FAULT";
-    if (data.temp >= 50) return "OVERHEAT";
-    if (data.battery < 20) return "LOW BATTERY";
+    if (!telemetry) return "CONNECTING";
+    if (inverterStatus === 'FAULT') return "FAULT";
+    if (voltage < 200 || voltage > 250) return "FAULT";
+    if (temp >= 50) return "OVERHEAT";
+    if (battery < 20) return "LOW BATTERY";
     return "OPERATIONAL";
   })();
 
@@ -180,7 +195,8 @@ export default function Dashboard() {
                   marginTop: 4,
                 }}
               >
-                Last update: {data.lastUpdated.toLocaleTimeString()}
+                Last update: {lastUpdated.toLocaleTimeString()}
+                {isFetching && " (updating...)"}
               </Text>
             </View>
 
@@ -244,7 +260,7 @@ export default function Dashboard() {
                   style={{ marginRight: 4 }}
                 />
                 <Text style={{ color: colors.textSecondary, fontSize: 10 }}>
-                  Solar: {(data.solarInput / 1000).toFixed(2)} kW
+                  Solar: {generation.toFixed(2)} kW
                 </Text>
               </View>
             </View>
@@ -299,32 +315,72 @@ export default function Dashboard() {
           Primary Meters
         </Text>
 
-        {/* Voltage Gauge */}
-        {/* Voltage Gauge with Dummy Data */}
-        <IndustrialGauge
-          value={latestReading}
-          max={260} 
-          label="Grid Voltage"
-          unit="V"
-          icon={Zap}
-          lowWarning={200}
-          highWarning={250}
-          greenZoneStart={220}
-          greenZoneEnd={240}
-        />
+        {/* Voltage Gauge - Live Data */}
+        {isLoading ? (
+          <View style={{ 
+            height: 200, 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            backgroundColor: colors.surface,
+            borderRadius: 16,
+            marginBottom: 16
+          }}>
+            <ActivityIndicator size="large" color={colors.accent} />
+            <Text style={{ color: colors.textSecondary, marginTop: 12 }}>
+              Loading telemetry data...
+            </Text>
+          </View>
+        ) : error ? (
+          <View style={{ 
+            height: 200, 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            backgroundColor: colors.surface,
+            borderRadius: 16,
+            marginBottom: 16,
+            padding: 20
+          }}>
+            <AlertTriangle size={32} color={colors.error} />
+            <Text style={{ color: colors.error, marginTop: 12, textAlign: 'center' }}>
+              Error loading data
+            </Text>
+            <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 12, textAlign: 'center' }}>
+              {error?.message || 'Failed to fetch telemetry data'}
+            </Text>
+            {!gridId && (
+              <Text style={{ color: colors.warning, marginTop: 8, fontSize: 11, textAlign: 'center' }}>
+                No Grid ID assigned. Please contact administrator.
+              </Text>
+            )}
+          </View>
+        ) : (
+          <IndustrialGauge
+            value={voltage}
+            max={260} 
+            label="Grid Voltage"
+            unit="V"
+            icon={Zap}
+            lowWarning={200}
+            highWarning={250}
+            greenZoneStart={220}
+            greenZoneEnd={240}
+          />
+        )}
 
-        {/* Current Gauge */}
-        <IndustrialGauge
-          value={data.current}
-          max={5} 
-          label="Panel Current"
-          unit="A"
-          icon={Activity}
-          lowWarning={0.2}
-          highWarning={2}
-          greenZoneStart={0.5}
-          greenZoneEnd={1.5}
-        />
+        {/* Current Gauge - Live Data */}
+        {!isLoading && !error && (
+          <IndustrialGauge
+            value={current}
+            max={20} 
+            label="Panel Current"
+            unit="A"
+            icon={Activity}
+            lowWarning={0.2}
+            highWarning={15}
+            greenZoneStart={1}
+            greenZoneEnd={12}
+          />
+        )}
 
         {/* Battery Module */}
         <Text
@@ -341,11 +397,13 @@ export default function Dashboard() {
           Energy Storage
         </Text>
 
-        <IndustrialBattery
-          percentage={Math.round(data.battery)}
-          isCharging={true}
-          powerKW={powerKW}
-        />
+        {!isLoading && !error && (
+          <IndustrialBattery
+            percentage={Math.round(battery)}
+            isCharging={generation > 0}
+            powerKW={powerKW}
+          />
+        )}
 
         {/* System Health Section */}
         <Text
@@ -362,39 +420,62 @@ export default function Dashboard() {
           System Health Monitor
         </Text>
 
-        <IndustrialStatusPanel
-          label="Inverter Temperature"
-          value={`${data.temp}°C`}
-          icon={Thermometer}
-          severity={
-            data.temp >= 50 ? "critical" : data.temp >= 45 ? "warning" : "ok"
-          }
-        />
+        {!isLoading && !error && (
+          <>
+            <IndustrialStatusPanel
+              label="Inverter Temperature"
+              value={`${temp.toFixed(1)}°C`}
+              icon={Thermometer}
+              severity={
+                temp >= 50 ? "critical" : temp >= 45 ? "warning" : "ok"
+              }
+            />
 
-        <IndustrialStatusPanel
-          label="Grid Supply Status"
-          value={
-            data.voltage < 200 || data.voltage > 250 ? "OUT OF RANGE" : "STABLE"
-          }
-          icon={Zap}
-          severity={
-            data.voltage < 200 || data.voltage > 250 ? "critical" : "ok"
-          }
-        />
+            <IndustrialStatusPanel
+              label="Grid Supply Status"
+              value={
+                voltage < 200 || voltage > 250 ? "OUT OF RANGE" : "STABLE"
+              }
+              icon={Zap}
+              severity={
+                voltage < 200 || voltage > 250 ? "critical" : "ok"
+              }
+            />
 
-        <IndustrialStatusPanel
-          label="Solar Array Input"
-          value={`${(data.solarInput / 1000).toFixed(2)} kW`}
-          icon={Sun}
-          severity={data.solarInput < 1000 ? "warning" : "ok"}
-        />
+            <IndustrialStatusPanel
+              label="Solar Array Input"
+              value={`${generation.toFixed(2)} kW`}
+              icon={Sun}
+              severity={generation < 0.5 ? "warning" : "ok"}
+            />
 
-        <IndustrialStatusPanel
-          label="Battery Health"
-          value={data.battery < 20 ? "LOW CHARGE" : "HEALTHY"}
-          icon={Activity}
-          severity={data.battery < 20 ? "warning" : "ok"}
-        />
+            <IndustrialStatusPanel
+              label="Battery Health"
+              value={battery < 20 ? "LOW CHARGE" : "HEALTHY"}
+              icon={Activity}
+              severity={battery < 20 ? "warning" : "ok"}
+            />
+
+            <IndustrialStatusPanel
+              label="Inverter Status"
+              value={inverterStatus}
+              icon={Power}
+              severity={
+                inverterStatus === 'FAULT' ? "critical" : 
+                inverterStatus === 'STANDBY' ? "warning" : "ok"
+              }
+            />
+
+            {consumption > 0 && (
+              <IndustrialStatusPanel
+                label="Consumption"
+                value={`${consumption.toFixed(2)} kW`}
+                icon={Activity}
+                severity="ok"
+              />
+            )}
+          </>
+        )}
 
         {/* Footer Info */}
         <View
@@ -417,7 +498,9 @@ export default function Dashboard() {
           >
             Industrial Solar Microgrid Controller v2.0{"\n"}
             Real-time monitoring system for electricians{"\n"}
-            Data refreshes every 2 seconds
+            Data refreshes every 3.9 seconds
+            {telemetry && `\nDevice: ${telemetry.deviceId || 'N/A'}`}
+            {telemetry && `\nLocation: ${telemetry.location || 'N/A'}`}
           </Text>
         </View>
       </ScrollView>

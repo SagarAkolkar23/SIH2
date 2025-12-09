@@ -2,8 +2,10 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { RefreshCw, Share2 } from "lucide-react-native";
+import { useThemeStore } from "../../../store/themeStore";
 
 export default function ActionButtonsRow({ onRefresh, onShare, isRefreshing }) {
+  const { colors } = useThemeStore();
   return (
     <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
       {/* Refresh Button */}
@@ -12,20 +14,20 @@ export default function ActionButtonsRow({ onRefresh, onShare, isRefreshing }) {
         activeOpacity={0.7}
         style={{
           flex: 1,
-          backgroundColor: "#1a1a1a",
+          backgroundColor: colors.surface,
           borderRadius: 12,
           padding: 14,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
           borderWidth: 1,
-          borderColor: isRefreshing ? "#22c55e" : "#333",
+          borderColor: isRefreshing ? colors.success : colors.border,
         }}
       >
-        <RefreshCw size={16} color={isRefreshing ? "#22c55e" : "#e5e7eb"} />
+        <RefreshCw size={16} color={isRefreshing ? colors.success : colors.textPrimary} />
         <Text
           style={{
-            color: "#e5e7eb",
+            color: colors.textPrimary,
             fontSize: 13,
             fontWeight: "600",
             marginLeft: 6,
@@ -41,20 +43,20 @@ export default function ActionButtonsRow({ onRefresh, onShare, isRefreshing }) {
         activeOpacity={0.7}
         style={{
           flex: 1,
-          backgroundColor: "#1a1a1a",
+          backgroundColor: colors.surface,
           borderRadius: 12,
           padding: 14,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
           borderWidth: 1,
-          borderColor: "#333",
+          borderColor: colors.border,
         }}
       >
-        <Share2 size={16} color="#e5e7eb" />
+        <Share2 size={16} color={colors.textPrimary} />
         <Text
           style={{
-            color: "#e5e7eb",
+            color: colors.textPrimary,
             fontSize: 13,
             fontWeight: "600",
             marginLeft: 6,

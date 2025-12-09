@@ -4,9 +4,11 @@ import { Zap, Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react-native";
 import { useLoginApi } from "../service/authService";
 import { useNavigation } from "@react-navigation/native";
 import { useAuthStore } from "../store/authStore";
+import { useThemeStore } from "../store/themeStore";
 import { testApiConnection } from "../api/useQuery";
 
 export default function MicrogridLogin() {
+  const { colors } = useThemeStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -17,64 +19,39 @@ export default function MicrogridLogin() {
   const user = useAuthStore((state) => state.user);
 
   const handleLogin = () => {
-    console.log('🔘 [FRONTEND AUTH SCREEN] Login button clicked');
-    
     setError("");
 
     if (!email || !password) {
-      console.log('❌ [FRONTEND AUTH SCREEN] Validation failed: Missing email or password');
       setError("Please enter both email and password");
       return;
     }
-
-    console.log('✅ [FRONTEND AUTH SCREEN] Validation passed, initiating login mutation');
-    console.log('📧 [FRONTEND AUTH SCREEN] Email:', email.substring(0, 3) + '***');
 
     loginMutation.mutate(
       { email, password },
       {
         onSuccess: (data) => {
-          console.log('✅ [FRONTEND AUTH SCREEN] Login mutation onSuccess callback triggered');
-          console.log('📦 [FRONTEND AUTH SCREEN] Success data:', data);
-          
           // Backend returns: { success: true, data: { user, token } }
           // Auth service already saves to store, so we can get it directly
           setTimeout(() => {
             const currentUser = useAuthStore.getState().user;
             const userRole = currentUser?.role;
             
-            console.log('👤 [FRONTEND AUTH SCREEN] Current user from store:', {
-              email: currentUser?.email,
-              role: userRole,
-            });
-            
             // Backend roles: SUPER_ADMIN, CONTROLLER, CONSUMER
             if (userRole === "CONTROLLER" || userRole === "SUPER_ADMIN") {
-              console.log('🧭 [FRONTEND AUTH SCREEN] Navigating to ControllerMain');
               navigation.replace("ControllerMain");
             } else if (userRole === "CONSUMER") {
-              console.log('🧭 [FRONTEND AUTH SCREEN] Navigating to UserMain');
               navigation.replace("UserMain");
             } else {
-              console.error('❌ [FRONTEND AUTH SCREEN] Unknown role:', userRole);
               setError("Unknown user role. Please contact administrator.");
             }
           }, 100);
         },
         onError: (err) => {
-          console.error('❌ [FRONTEND AUTH SCREEN] Login mutation error');
-          console.error('📦 [FRONTEND AUTH SCREEN] Error object:', {
-            message: err?.message,
-            status: err?.response?.status,
-            error: err?.response?.data,
-          });
-          
           // Backend returns: { success: false, message: "..." }
           const errorMessage = err?.response?.data?.message || 
                               err?.response?.data?.error || 
                               err?.message || 
                               "Login failed. Please check your credentials.";
-          console.log('📝 [FRONTEND AUTH SCREEN] Setting error message:', errorMessage);
           setError(errorMessage);
         },
       }
@@ -82,7 +59,6 @@ export default function MicrogridLogin() {
   };
 
   const handleTestConnection = async () => {
-    console.log('🧪 Testing API connection...');
     const isConnected = await testApiConnection();
     if (isConnected) {
       Alert.alert('Success', 'Backend is reachable!');
@@ -92,58 +68,58 @@ export default function MicrogridLogin() {
   };
 
   return (
-    <View className="flex-1 bg-black justify-center items-center px-6">
-      <View className="w-full max-w-md bg-neutral-900 p-6 rounded-2xl border border-neutral-700">
+    <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
+      <View style={{ width: '100%', maxWidth: 400, backgroundColor: colors.surface, padding: 24, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
         {/* Icon */}
-        <View className="items-center mb-6">
-          <Zap size={56} color="#22c55e" />
+        <View style={{ alignItems: 'center', marginBottom: 24 }}>
+          <Zap size={56} color={colors.success} />
         </View>
 
-        <Text className="text-white text-3xl font-bold text-center">
+        <Text style={{ color: colors.textPrimary, fontSize: 28, fontWeight: '800', textAlign: 'center' }}>
           Welcome Back
         </Text>
-        <Text className="text-gray-400 text-center mb-6">
+        <Text style={{ color: colors.textSecondary, textAlign: 'center', marginBottom: 24 }}>
           Solar Microgrid Control Panel
         </Text>
 
         {/* Error Message */}
         {error ? (
-          <View className="flex-row gap-2 bg-red-500/20 border border-red-500/40 p-3 rounded-xl mb-4">
-            <AlertCircle size={18} color="#fb4747" />
-            <Text className="text-red-400 text-sm">{error}</Text>
+          <View style={{ flexDirection: 'row', gap: 8, backgroundColor: colors.error + '20', borderWidth: 1, borderColor: colors.error + '40', padding: 12, borderRadius: 12, marginBottom: 16 }}>
+            <AlertCircle size={18} color={colors.error} />
+            <Text style={{ color: colors.error, fontSize: 13, flex: 1 }}>{error}</Text>
           </View>
         ) : null}
 
         {/* Email Input */}
-        <View className="flex-row items-center border border-neutral-700 rounded-xl px-3 py-3 mb-4">
-          <Mail size={20} color="#aaa" className="mr-2" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12, marginBottom: 16 }}>
+          <Mail size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
           <TextInput
             placeholder="Email"
-            placeholderTextColor="#777"
+            placeholderTextColor={colors.textTertiary}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
-            className="flex-1 text-white"
+            style={{ flex: 1, color: colors.textPrimary }}
           />
         </View>
 
         {/* Password Input */}
-        <View className="flex-row items-center border border-neutral-700 rounded-xl px-3 py-3 mb-6">
-          <Lock size={20} color="#aaa" className="mr-2" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12, marginBottom: 24 }}>
+          <Lock size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
           <TextInput
             placeholder="Password"
-            placeholderTextColor="#777"
+            placeholderTextColor={colors.textTertiary}
             secureTextEntry={!showPassword}
             value={password}
             onChangeText={setPassword}
-            className="flex-1 text-white"
+            style={{ flex: 1, color: colors.textPrimary }}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
             {showPassword ? (
-              <EyeOff size={20} color="#ccc" />
+              <EyeOff size={20} color={colors.textTertiary} />
             ) : (
-              <Eye size={20} color="#ccc" />
+              <Eye size={20} color={colors.textTertiary} />
             )}
           </TouchableOpacity>
         </View>
@@ -152,20 +128,25 @@ export default function MicrogridLogin() {
         <TouchableOpacity
           disabled={loginMutation.isPending}
           onPress={handleLogin}
-          className={`bg-green-500 py-4 rounded-xl items-center ${
-            loginMutation.isPending ? "opacity-50" : "active:bg-green-600"
-          }`}
+          style={{
+            backgroundColor: loginMutation.isPending ? colors.textTertiary : colors.success,
+            paddingVertical: 16,
+            borderRadius: 12,
+            alignItems: 'center',
+            opacity: loginMutation.isPending ? 0.5 : 1,
+          }}
+          activeOpacity={0.8}
         >
-          <Text className="font-bold text-black text-lg">
+          <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 16 }}>
             {loginMutation.isPending ? "Signing in..." : "Sign In"}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={handleTestConnection}
-          style={{ marginTop: 10, padding: 10, backgroundColor: 'blue' }}
+          style={{ marginTop: 10, padding: 10, backgroundColor: colors.accent, borderRadius: 8 }}
         >
-          <Text style={{ color: 'white' }}>Test Connection</Text>
+          <Text style={{ color: colors.textPrimary, textAlign: 'center' }}>Test Connection</Text>
         </TouchableOpacity>
       </View>
     </View>

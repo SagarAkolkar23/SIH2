@@ -26,7 +26,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("App Error:", error, errorInfo);
+    // Error caught by error boundary
   }
 
   render() {
@@ -65,7 +65,7 @@ export default function App() {
       try {
         await initializeTheme();
       } catch (error) {
-        console.error("Error initializing theme:", error);
+        // Error initializing theme
       } finally {
         setIsInitializing(false);
       }
@@ -100,11 +100,11 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <NavigationContainer>
-          <AppNavigator />
-        </NavigationContainer>
-      </QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <NavigationContainer>
+        <AppNavigator />
+      </NavigationContainer>
+    </QueryClientProvider>
     </ErrorBoundary>
   );
 }

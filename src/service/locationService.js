@@ -40,8 +40,6 @@ export const useCurrentLocation = (enabled = true) => {
 
       const { latitude, longitude } = currentLocation.coords;
       
-      console.log('📍 [LOCATION] GPS coordinates obtained:', { latitude, longitude });
-      
       setLocation({
         latitude,
         longitude,
@@ -50,7 +48,6 @@ export const useCurrentLocation = (enabled = true) => {
 
       setLoading(false);
     } catch (err) {
-      console.error('❌ [LOCATION] Error getting location:', err);
       setError(err.message || 'Failed to get location');
       setLoading(false);
     }

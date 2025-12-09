@@ -3,6 +3,7 @@ import React from "react";
 import { View, Text } from "react-native";
 import Svg, { Circle, Path, Line, Text as SvgText } from "react-native-svg";
 import { Platform } from "react-native";
+import { useThemeStore } from "../../../store/themeStore";
 
 const IndustrialGauge = ({
   value,
@@ -15,6 +16,7 @@ const IndustrialGauge = ({
   greenZoneStart,
   greenZoneEnd,
 }) => {
+  const { colors } = useThemeStore();
   const numericValue = Number(value) || 0;
   const clamped = Math.max(0, Math.min(numericValue, max));
 
@@ -28,7 +30,7 @@ const IndustrialGauge = ({
   })();
 
   const statusColor =
-    status === "LOW" ? "#f59e0b" : status === "HIGH" ? "#ef4444" : "#22c55e";
+    status === "LOW" ? colors.warning : status === "HIGH" ? colors.error : colors.success;
 
   // Helper function for SVG arc path
   const describeArc = (x, y, radius, startAngle, endAngle) => {
@@ -68,7 +70,7 @@ const IndustrialGauge = ({
           y1={majorStart.y}
           x2={majorEnd.x}
           y2={majorEnd.y}
-          stroke="#888"
+          stroke={colors.borderDark}
           strokeWidth="2"
         />
       );
@@ -80,7 +82,7 @@ const IndustrialGauge = ({
           key={`label-${i}`}
           x={labelPos.x}
           y={labelPos.y}
-          fill="#9ca3af"
+          fill={colors.textTertiary}
           fontSize="9"
           fontWeight="600"
           textAnchor="middle"
@@ -106,7 +108,7 @@ const IndustrialGauge = ({
               y1={minorStart.y}
               x2={minorEnd.x}
               y2={minorEnd.y}
-              stroke="#555"
+              stroke={colors.border}
               strokeWidth="1"
             />
           );
@@ -125,11 +127,11 @@ const IndustrialGauge = ({
   return (
     <View
       style={{
-        backgroundColor: "#1a1a1a",
+        backgroundColor: colors.surface,
         borderRadius: 20,
         padding: 16,
         borderWidth: 2,
-        borderColor: "#333",
+        borderColor: colors.border,
         marginBottom: 16,
       }}
     >
@@ -137,10 +139,10 @@ const IndustrialGauge = ({
       <View
         style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}
       >
-        {Icon && <Icon size={20} color="#9ca3af" style={{ marginRight: 8 }} />}
+        {Icon && <Icon size={20} color={colors.textTertiary} style={{ marginRight: 8 }} />}
         <Text
           style={{
-            color: "#e5e7eb",
+            color: colors.textPrimary,
             fontSize: 13,
             fontWeight: "700",
             letterSpacing: 0.5,
@@ -155,11 +157,11 @@ const IndustrialGauge = ({
       <View
         style={{
           alignItems: "center",
-          backgroundColor: "#0a0a0a",
+          backgroundColor: colors.surfaceSecondary,
           borderRadius: 200,
           padding: 20,
           borderWidth: 3,
-          borderColor: "#2a2a2a",
+          borderColor: colors.borderLight,
         }}
       >
         <Svg width={200} height={200}>
@@ -168,7 +170,7 @@ const IndustrialGauge = ({
           <Path
             d={describeArc(100, 100, 78, -135, (lowWarning / max) * 270 - 135)}
             fill="none"
-            stroke="#f59e0b"
+            stroke={colors.warning}
             strokeWidth="6"
             opacity="0.3"
           />
@@ -183,7 +185,7 @@ const IndustrialGauge = ({
               (greenZoneEnd / max) * 270 - 135
             )}
             fill="none"
-            stroke="#22c55e"
+            stroke={colors.success}
             strokeWidth="6"
             opacity="0.4"
           />
@@ -192,7 +194,7 @@ const IndustrialGauge = ({
           <Path
             d={describeArc(100, 100, 78, (highWarning / max) * 270 - 135, 135)}
             fill="none"
-            stroke="#ef4444"
+            stroke={colors.error}
             strokeWidth="6"
             opacity="0.3"
           />
@@ -213,8 +215,8 @@ const IndustrialGauge = ({
             cx={100}
             cy={100}
             r={10}
-            fill="#1a1a1a"
-            stroke="#444"
+            fill={colors.surface}
+            stroke={colors.borderDark}
             strokeWidth="2"
           />
           <Circle cx={100} cy={100} r={6} fill={statusColor} />
@@ -225,11 +227,11 @@ const IndustrialGauge = ({
       <View
         style={{
           marginTop: 16,
-          backgroundColor: "#000",
+          backgroundColor: colors.surfaceTertiary,
           borderRadius: 8,
           padding: 12,
           borderWidth: 1,
-          borderColor: "#333",
+          borderColor: colors.border,
         }}
       >
         <View
@@ -251,7 +253,7 @@ const IndustrialGauge = ({
           </Text>
           <Text
             style={{
-              color: "#9ca3af",
+              color: colors.textTertiary,
               fontSize: 18,
               fontWeight: "600",
               marginLeft: 6,

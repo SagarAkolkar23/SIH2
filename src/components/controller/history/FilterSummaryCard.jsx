@@ -2,18 +2,20 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Filter, Calendar, MapPin } from "lucide-react-native";
+import { useThemeStore } from "../../../store/themeStore";
 
 const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
+  const { colors } = useThemeStore();
   return (
     <TouchableOpacity
       onPress={onPress}
       style={{
-        backgroundColor: "#1a1a1a",
+        backgroundColor: colors.surface,
         borderRadius: 16,
         padding: 16,
         marginBottom: 16,
         borderWidth: 2,
-        borderColor: "#22c55e",
+        borderColor: colors.success,
       }}
       activeOpacity={0.7}
     >
@@ -30,18 +32,18 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
             width: 36,
             height: 36,
             borderRadius: 8,
-            backgroundColor: "#22c55e20",
+            backgroundColor: `${colors.success}20`,
             alignItems: "center",
             justifyContent: "center",
             marginRight: 10,
           }}
         >
-          <Filter size={18} color="#22c55e" />
+          <Filter size={18} color={colors.success} />
         </View>
         <View style={{ flex: 1 }}>
           <Text
             style={{
-              color: "#22c55e",
+              color: colors.success,
               fontSize: 11,
               fontWeight: "700",
               textTransform: "uppercase",
@@ -52,7 +54,7 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
           </Text>
           <Text
             style={{
-              color: "#6b7280",
+              color: colors.textTertiary,
               fontSize: 10,
               marginTop: 2,
             }}
@@ -65,11 +67,11 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
       {/* Filter Details */}
       <View
         style={{
-          backgroundColor: "#0a0a0a",
+          backgroundColor: colors.surfaceSecondary,
           borderRadius: 10,
           padding: 12,
           borderWidth: 1,
-          borderColor: "#333",
+          borderColor: colors.border,
         }}
       >
         {/* Date Filter */}
@@ -80,7 +82,7 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
             marginBottom: 8,
             paddingBottom: 8,
             borderBottomWidth: 1,
-            borderBottomColor: "#1a1a1a",
+            borderBottomColor: colors.surface,
           }}
         >
           <View
@@ -88,18 +90,18 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
               width: 28,
               height: 28,
               borderRadius: 6,
-              backgroundColor: "#1a1a1a",
+              backgroundColor: colors.surface,
               alignItems: "center",
               justifyContent: "center",
               marginRight: 10,
             }}
           >
-            <Calendar size={14} color="#9ca3af" />
+            <Calendar size={14} color={colors.textTertiary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                color: "#6b7280",
+                color: colors.textTertiary,
                 fontSize: 10,
                 marginBottom: 2,
               }}
@@ -108,7 +110,7 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
             </Text>
             <Text
               style={{
-                color: "#e5e7eb",
+                color: colors.textPrimary,
                 fontSize: 13,
                 fontWeight: "600",
               }}
@@ -126,7 +128,7 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
             marginBottom: 8,
             paddingBottom: 8,
             borderBottomWidth: 1,
-            borderBottomColor: "#1a1a1a",
+            borderBottomColor: colors.surface,
           }}
         >
           <View
@@ -134,18 +136,18 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
               width: 28,
               height: 28,
               borderRadius: 6,
-              backgroundColor: "#1a1a1a",
+              backgroundColor: colors.surface,
               alignItems: "center",
               justifyContent: "center",
               marginRight: 10,
             }}
           >
-            <MapPin size={14} color="#9ca3af" />
+            <MapPin size={14} color={colors.textTertiary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                color: "#6b7280",
+                color: colors.textTertiary,
                 fontSize: 10,
                 marginBottom: 2,
               }}
@@ -154,7 +156,7 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
             </Text>
             <Text
               style={{
-                color: "#e5e7eb",
+                color: colors.textPrimary,
                 fontSize: 13,
                 fontWeight: "600",
               }}
@@ -175,7 +177,7 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
         >
           <Text
             style={{
-              color: "#22c55e",
+              color: colors.success,
               fontSize: 12,
               fontWeight: "700",
             }}
@@ -184,7 +186,7 @@ const FilterSummaryCard = ({ dateLabel, areaLabel, recordCount, onPress }) => {
           </Text>
           <Text
             style={{
-              color: "#6b7280",
+              color: colors.textTertiary,
               fontSize: 11,
               marginLeft: 4,
             }}

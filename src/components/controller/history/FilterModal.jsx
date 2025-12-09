@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react-native";
+import { useThemeStore } from "../../../store/themeStore";
 
 if (Platform.OS === "android") {
   UIManager.setLayoutAnimationEnabledExperimental &&
@@ -30,6 +31,7 @@ const FilterModal = ({
   currentDateFilter,
   currentAreaFilter,
 }) => {
+  const { colors, theme } = useThemeStore();
   const [selectedDate, setSelectedDate] = useState(currentDateFilter);
   const [selectedArea, setSelectedArea] = useState(currentAreaFilter);
 
@@ -85,11 +87,11 @@ const FilterModal = ({
   }) => (
     <View
       style={{
-        backgroundColor: "#1a1a1a",
+        backgroundColor: colors.surface,
         padding: 14,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: "#333",
+        borderColor: colors.border,
         marginBottom: 14,
       }}
     >
@@ -102,11 +104,11 @@ const FilterModal = ({
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Icon size={18} color="#22c55e" />
+          <Icon size={18} color={colors.success} />
           <Text
             style={{
               marginLeft: 10,
-              color: "#e5e7eb",
+              color: colors.textPrimary,
               fontSize: 15,
               fontWeight: "700",
             }}
@@ -116,14 +118,14 @@ const FilterModal = ({
         </View>
 
         {expandedSection === sectionKey ? (
-          <ChevronUp size={20} color="#22c55e" />
+          <ChevronUp size={20} color={colors.success} />
         ) : (
-          <ChevronDown size={20} color="#999" />
+          <ChevronDown size={20} color={colors.textTertiary} />
         )}
       </TouchableOpacity>
 
       {/* Display Selected Value */}
-      <Text style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
+      <Text style={{ marginTop: 6, color: colors.textTertiary, fontSize: 13 }}>
         {selectedLabel}
       </Text>
 
@@ -143,7 +145,7 @@ const FilterModal = ({
               }}
             >
               {selectedValue === opt.value ? (
-                <Check size={20} color="#22c55e" />
+                <Check size={20} color={colors.success} />
               ) : (
                 <View
                   style={{
@@ -151,11 +153,11 @@ const FilterModal = ({
                     height: 20,
                     borderRadius: 10,
                     borderWidth: 2,
-                    borderColor: "#444",
+                    borderColor: colors.borderDark,
                   }}
                 />
               )}
-              <Text style={{ marginLeft: 12, color: "#e5e7eb", fontSize: 14 }}>
+              <Text style={{ marginLeft: 12, color: colors.textPrimary, fontSize: 14 }}>
                 {opt.label}
               </Text>
             </TouchableOpacity>
@@ -175,13 +177,13 @@ const FilterModal = ({
       <View
         style={{
           flex: 1,
-          backgroundColor: "rgba(0,0,0,0.85)",
+          backgroundColor: theme === "dark" ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,0.5)",
           justifyContent: "flex-end",
         }}
       >
         <View
           style={{
-            backgroundColor: "#0b0b0b",
+            backgroundColor: colors.surface,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             padding: 20,
@@ -192,11 +194,11 @@ const FilterModal = ({
           <View
             style={{ flexDirection: "row", justifyContent: "space-between" }}
           >
-            <Text style={{ color: "#e5e7eb", fontSize: 20, fontWeight: "800" }}>
+            <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: "800" }}>
               Filters
             </Text>
             <TouchableOpacity onPress={onClose}>
-              <X size={22} color="#999" />
+              <X size={22} color={colors.textTertiary} />
             </TouchableOpacity>
           </View>
 
@@ -233,7 +235,7 @@ const FilterModal = ({
           <TouchableOpacity
             onPress={handleApply}
             style={{
-              backgroundColor: "#22c55e",
+              backgroundColor: colors.success,
               padding: 16,
               borderRadius: 12,
               marginTop: 10,
@@ -241,7 +243,7 @@ const FilterModal = ({
           >
             <Text
               style={{
-                color: "#000",
+                color: theme === "dark" ? colors.textPrimary : "#000",
                 textAlign: "center",
                 fontWeight: "700",
                 fontSize: 15,

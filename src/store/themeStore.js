@@ -120,7 +120,7 @@ export const useThemeStore = create((set, get) => ({
         set({ theme: savedTheme, colors: themes[savedTheme] });
       }
     } catch (error) {
-      console.error("Error loading theme:", error);
+      // Error loading theme
     }
   },
 }));

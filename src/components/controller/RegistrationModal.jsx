@@ -102,10 +102,11 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
           ]);
         },
         onError: (error) => {
-          Alert.alert(
-            "Error",
-            error?.response?.data?.message || error?.response?.data?.error || "Failed to register house"
-          );
+          const errorMessage = error?.message || 
+                              error?.response?.data?.message || 
+                              error?.response?.data?.error || 
+                              "Failed to register house. Please try again.";
+          Alert.alert("Error", errorMessage);
         },
       }
     );
@@ -117,8 +118,28 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert("Error", "Please enter a valid email address");
+      return;
+    }
+
+    // Backend requires: at least 8 characters with uppercase, lowercase, and number
+    if (password.length < 8) {
+      Alert.alert("Error", "Password must be at least 8 characters long");
+      return;
+    }
+    
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    
+    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+      Alert.alert(
+        "Error", 
+        "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+      );
       return;
     }
 
@@ -144,10 +165,11 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
           ]);
         },
         onError: (error) => {
-          Alert.alert(
-            "Error",
-            error?.response?.data?.message || error?.response?.data?.error || "Failed to register user"
-          );
+          const errorMessage = error?.message || 
+                              error?.response?.data?.message || 
+                              error?.response?.data?.error || 
+                              "Failed to register user. Please try again.";
+          Alert.alert("Error", errorMessage);
         },
       }
     );
@@ -190,9 +212,21 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
       return;
     }
 
-    // Validate password
-    if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
+    // Backend requires: at least 8 characters with uppercase, lowercase, and number
+    if (password.length < 8) {
+      Alert.alert("Error", "Password must be at least 8 characters long");
+      return;
+    }
+    
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    
+    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+      Alert.alert(
+        "Error", 
+        "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+      );
       return;
     }
 
@@ -230,10 +264,9 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
           );
         },
         onError: (error) => {
-          console.error('Registration error:', error);
-          const errorMessage = error?.response?.data?.message || 
+          const errorMessage = error?.message || 
+                              error?.response?.data?.message || 
                               error?.response?.data?.error || 
-                              error?.message ||
                               "Failed to register house and user. Please try again.";
           Alert.alert("Error", errorMessage);
         },
@@ -713,7 +746,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       paddingHorizontal: 16,
                       paddingVertical: 14,
                       backgroundColor: colors.surfaceSecondary,
-                      shadowColor: "#000",
+                      shadowColor: colors.border,
                       shadowOffset: { width: 0, height: 1 },
                       shadowOpacity: 0.05,
                       shadowRadius: 2,
@@ -760,7 +793,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       paddingHorizontal: 16,
                       paddingVertical: 14,
                       backgroundColor: colors.surfaceSecondary,
-                      shadowColor: "#000",
+                      shadowColor: colors.border,
                       shadowOffset: { width: 0, height: 1 },
                       shadowOpacity: 0.05,
                       shadowRadius: 2,
@@ -809,7 +842,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       paddingHorizontal: 16,
                       paddingVertical: 14,
                       backgroundColor: colors.surfaceSecondary,
-                      shadowColor: "#000",
+                      shadowColor: colors.border,
                       shadowOffset: { width: 0, height: 1 },
                       shadowOpacity: 0.05,
                       shadowRadius: 2,
@@ -856,7 +889,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       paddingHorizontal: 16,
                       paddingVertical: 14,
                       backgroundColor: colors.surfaceSecondary,
-                      shadowColor: "#000",
+                      shadowColor: colors.border,
                       shadowOffset: { width: 0, height: 1 },
                       shadowOpacity: 0.05,
                       shadowRadius: 2,
@@ -902,7 +935,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       paddingHorizontal: 16,
                       paddingVertical: 14,
                       backgroundColor: colors.surfaceSecondary,
-                      shadowColor: "#000",
+                      shadowColor: colors.border,
                       shadowOffset: { width: 0, height: 1 },
                       shadowOpacity: 0.05,
                       shadowRadius: 2,
@@ -933,7 +966,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                       marginLeft: 4,
                     }}
                   >
-                    Must be at least 6 characters long
+                    Must be at least 8 characters with uppercase, lowercase, and number
                   </Text>
                 </View>
 
@@ -981,10 +1014,10 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                 >
                   {registerBothMutation.isPending ? (
                     <>
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color={colors.textPrimary} />
                       <Text
                         style={{
-                          color: "#fff",
+                          color: colors.textPrimary,
                           fontSize: 16,
                           fontWeight: "700",
                           marginLeft: 8,
@@ -995,10 +1028,10 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                     </>
                   ) : (
                     <>
-                      <Home size={18} color="#fff" />
+                      <Home size={18} color={colors.textPrimary} />
                       <Text
                         style={{
-                          color: "#fff",
+                          color: colors.textPrimary,
                           fontSize: 16,
                           fontWeight: "700",
                         }}
@@ -1282,7 +1315,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                             style={{
                               color:
                                 selectedHouseId === house._id
-                                  ? "#fff"
+                                  ? colors.textPrimary
                                   : colors.textPrimary,
                               fontSize: 12,
                               fontWeight: "600",
@@ -1496,7 +1529,7 @@ const RegistrationModal = ({ visible, onClose, mode = "house-and-user" }) => {
                   >
                     <Lock size={20} color={colors.textSecondary} />
                     <TextInput
-                      placeholder="Minimum 6 characters"
+                      placeholder="Min 8 chars: A-Z, a-z, 0-9"
                       placeholderTextColor={colors.textTertiary}
                       value={password}
                       onChangeText={setPassword}
