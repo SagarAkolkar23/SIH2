@@ -89,7 +89,7 @@ export default function Dashboard() {
   const systemStatus = (() => {
     if (!telemetry) return "CONNECTING";
     if (inverterStatus === 'FAULT') return "FAULT";
-    if (voltage < 200 || voltage > 250) return "FAULT";
+    if (voltage < 6 || voltage > 18) return "FAULT";
     if (temp >= 50) return "OVERHEAT";
     if (battery < 20) return "LOW BATTERY";
     return "OPERATIONAL";
@@ -356,14 +356,14 @@ export default function Dashboard() {
         ) : (
           <IndustrialGauge
             value={voltage}
-            max={260} 
+            max={18} 
             label="Grid Voltage"
             unit="V"
             icon={Zap}
-            lowWarning={200}
-            highWarning={250}
-            greenZoneStart={220}
-            greenZoneEnd={240}
+            lowWarning={3}
+            highWarning={15}
+            greenZoneStart={5}
+            greenZoneEnd={14}
           />
         )}
 

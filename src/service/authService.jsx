@@ -24,28 +24,54 @@ export const useLoginApi = () => {
       console.log('[LOGIN] User role:', user?.role);
       
       if (token && user) {
-        setAuthData({
+        console.log('[LOGIN] Storing auth data in Zustand store...');
+        await setAuthData({
           token: token,
           user: user,
         });
 
-        console.log('[LOGIN] Auth data stored, starting FCM token registration...');
+        // Verify auth state is set
+        const verifyToken = useAuthStore.getState().token;
+        const verifyUser = useAuthStore.getState().user;
+        console.log('[LOGIN] Auth state verification:');
+        console.log(".............",verifyToken);
+        console.log('  - Token set:', verifyToken ? 'Yes' : 'No');
+        console.log('  - User set:', verifyUser ? 'Yes' : 'No');
+        console.log('  - User email:', verifyUser?.email || 'N/A');
+        console.log('  - User role:', verifyUser?.role || 'N/A');
+
+        if (!verifyToken || !verifyUser) {
+          console.log('[LOGIN] ⚠️ Auth state not fully set, retrying...');
+          // Retry setting auth data
+          await setAuthData({
+            token: token,
+            user: user,
+          });
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        console.log('[LOGIN] Starting FCM token registration...');
         
         // Register FCM token after successful login
         // This is non-blocking and will fail silently if permissions are denied
         try {
           const fcmToken = await initializeAndRegister();
           if (fcmToken) {
-            console.log('[LOGIN] ✅ FCM token registration initiated successfully');
+            console.log('[LOGIN] ✅ FCM token registration completed successfully');
             console.log('[LOGIN] FCM Token (first 30 chars):', fcmToken.substring(0, 30) + '...');
+            console.log('[LOGIN] FCM Token length:', fcmToken.length);
           } else {
             console.log('[LOGIN] ⚠️ FCM token registration failed or permissions denied');
+            console.log('[LOGIN] Check console logs above for detailed error information');
           }
         } catch (error) {
           console.log('[LOGIN] ❌ Error during FCM token registration:', error.message);
+          console.log('[LOGIN] Error stack:', error.stack);
         }
       } else {
         console.log('[LOGIN] ❌ Missing token or user data');
+        console.log('[LOGIN] Token present:', !!token);
+        console.log('[LOGIN] User present:', !!user);
       }
     },
   });

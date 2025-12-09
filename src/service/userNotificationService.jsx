@@ -88,25 +88,38 @@ export const useInitializeAndRegisterFCM = () => {
 
       // If we have a token, register it with backend
       if (token) {
+        console.log('[FCM] ✅ Token obtained, preparing to register with backend...');
+        console.log('[FCM] Token length:', token.length);
+        console.log('[FCM] Token (first 30 chars):', token.substring(0, 30) + '...');
+        
         // Check if auth token is available before making API call
-        const authToken = useAuthStore.getState().token;
+        let authToken = useAuthStore.getState().token;
+        console.log('[FCM] Initial auth token check:', authToken ? 'Available' : 'Not available');
+        
         if (!authToken) {
-          console.log('[FCM] ⚠️ Auth token not available, waiting...');
+          console.log('[FCM] ⚠️ Auth token not available, waiting 500ms...');
           // Wait a bit and check again (auth might still be setting up)
           await new Promise(resolve => setTimeout(resolve, 500));
-          const authTokenRetry = useAuthStore.getState().token;
-          if (!authTokenRetry) {
+          authToken = useAuthStore.getState().token;
+          console.log('[FCM] Auth token after wait:', authToken ? 'Available' : 'Still not available');
+          
+          if (!authToken) {
             console.log('[FCM] ❌ Auth token still not available after wait');
+            console.log('[FCM] ⚠️ Will retry token registration later when auth is available');
+            console.log('[FCM] Token stored locally, can be registered on next app start');
             console.log('[FCM] ========================================');
             return token; // Return token anyway, it can be registered later
           }
         }
         
-        console.log('[FCM] Registering token with backend...');
-        console.log('[FCM] Auth token available:', authToken ? 'Yes' : 'No');
-        console.log('[FCM] Token (first 30 chars):', token.substring(0, 30) + '...');
+        console.log('[FCM] ✅ Auth token available, proceeding with backend registration...');
+        console.log('[FCM] Auth token (first 20 chars):', authToken.substring(0, 20) + '...');
+        
+        // Add additional delay to ensure auth state is fully set
+        await new Promise(resolve => setTimeout(resolve, 200));
         
         try {
+          console.log('[FCM] Calling backend API to register token...');
           const result = await registerTokenMutation.mutateAsync(token);
           console.log('[FCM] ✅ Token registered successfully with backend');
           console.log('[FCM] Backend response:', JSON.stringify(result, null, 2));
@@ -114,16 +127,23 @@ export const useInitializeAndRegisterFCM = () => {
           return token;
         } catch (error) {
           console.log('[FCM] ❌ Failed to register token with backend');
-          console.log('[FCM] Error:', error.message);
+          console.log('[FCM] Error message:', error.message);
           console.log('[FCM] Error response:', error.response?.data);
           console.log('[FCM] Error status:', error.response?.status);
-          console.log('[FCM] Full error:', error);
+          console.log('[FCM] Error code:', error.code);
+          console.log('[FCM] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+          console.log('[FCM] ⚠️ Token is stored locally but not in database');
+          console.log('[FCM] Token will be retried on next app start or when manually triggered');
           console.log('[FCM] ========================================');
           // Don't return null here - still return token so it can be retried
           return token;
         }
       } else {
-        console.log('[FCM] ⚠️ No token available to register');
+        console.log('[FCM] ❌ No token available to register');
+        console.log('[FCM] Possible reasons:');
+        console.log('  1. Notification permissions denied');
+        console.log('  2. Project ID not configured');
+        console.log('  3. Expo notifications module error');
         console.log('[FCM] ========================================');
       }
 

@@ -1,6 +1,6 @@
 // UserDashboard.js
-import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, SafeAreaView, TouchableOpacity } from "react-native";
+import React, { useState } from "react";
+import { View, Text, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { 
   Zap, 
   Activity,
@@ -19,6 +19,7 @@ import UserTopAppBar from "../../components/users/TopAppBar";
 import ProfileModal from "../../components/users/ProfileModal";
 import IndustrialGauge from "../../components/controller/dashboard/industrialGauge";
 import IndustrialBattery from "../../components/controller/dashboard/IndustrialBattery";
+import { useUserDashboardQuery } from "../../service/user/dashboardService";
 
 // Odisha Electricity Tariff (Domestic Category)
 const ELECTRICITY_RATES = {
@@ -55,7 +56,15 @@ export default function UserDashboard() {
   const user = useAuthStore((state) => state.user);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   
-  const [dashboardData, setDashboardData] = useState({
+  // Fetch live dashboard data from backend
+  const { 
+    data: dashboardResponse, 
+    isLoading: dashboardLoading,
+    isError: dashboardError 
+  } = useUserDashboardQuery();
+
+  // Hardcoded fallback data
+  const fallbackData = {
     currentUsage: 2.5,
     batteryLevel: 75,
     current: 12.5, // Current in Amperes
@@ -68,36 +77,81 @@ export default function UserDashboard() {
     savings: 2450.50,
     isCharging: true,
     batteryPowerKW: 1.2,
-  });
+  };
 
-  // Simulated live data updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDashboardData((prev) => {
-        const newUsage = 2.3 + Math.random() * 0.5;
-        const newVoltage = 220 + Math.random() * 20;
-        // Calculate current based on Power = Voltage × Current
-        const newCurrent = (newUsage * 1000) / newVoltage; // Convert kW to W, then calculate current
-        
-        return {
-          ...prev,
-          currentUsage: newUsage,
-          batteryLevel: Math.min(Math.max(prev.batteryLevel + (Math.random() * 2 - 1), 0), 100),
-          current: newCurrent,
-          efficiency: 90 + Math.random() * 4,
-          temperature: 25 + Math.random() * 8,
-          voltage: newVoltage,
-          lastUpdated: new Date(),
-          isCharging: prev.batteryLevel < 95,
-          batteryPowerKW: 0.5 + Math.random() * 2,
-          // Simulate monthly consumption increase (small increment)
-          monthlyUnitsConsumed: prev.monthlyUnitsConsumed + (Math.random() * 0.001),
-        };
-      });
-    }, 3000);
+  // Transform backend data to match frontend format, with fallback
+  const getDashboardData = () => {
+    // If loading or error, use fallback
+    // Backend returns: { success: true, data: dashboard }
+    // useCustomQuery returns res.data, so dashboardResponse = { success: true, data: dashboard }
+    if (dashboardLoading || dashboardError || !dashboardResponse?.data) {
+      if (dashboardLoading) {
+        console.log('[USER DASHBOARD] ⏳ Loading dashboard data, using fallback');
+      } else if (dashboardError) {
+        console.log('[USER DASHBOARD] ❌ Error loading dashboard data, using fallback');
+      } else if (!dashboardResponse?.data) {
+        console.log('[USER DASHBOARD] ⚠️ No dashboard data in response, using fallback');
+      }
+      return fallbackData;
+    }
 
-    return () => clearInterval(interval);
-  }, []);
+    const backendData = dashboardResponse.data;
+    console.log('[USER DASHBOARD] 📊 Processing live dashboard data');
+    console.log('[USER DASHBOARD] Backend data keys:', Object.keys(backendData));
+    console.log('[USER DASHBOARD] Voltage:', backendData.current_voltage);
+    console.log('[USER DASHBOARD] Current:', backendData.current_current);
+    console.log('[USER DASHBOARD] Power:', backendData.current_power || backendData.consumption);
+    console.log('[USER DASHBOARD] Battery:', backendData.battery_percentage);
+    console.log('[USER DASHBOARD] Temperature:', backendData.temperature);
+    console.log('[USER DASHBOARD] Inverter Status:', backendData.inverter_status);
+    console.log('[USER DASHBOARD] Last Updated:', backendData.lastUpdated);
+    
+    // Calculate power in kW from backend data (power is in W)
+    const powerW = backendData.current_power || backendData.consumption || 0;
+    const powerKW = powerW / 1000; // Convert W to kW
+    
+    // Get voltage (backend returns in V)
+    const voltage = backendData.current_voltage || 230;
+    
+    // Calculate current from power and voltage: I = P / V
+    const calculatedCurrent = voltage > 0 ? powerW / voltage : 12.5;
+    
+    // Use backend current if available, otherwise use calculated
+    const current = backendData.current_current || calculatedCurrent;
+
+    // Map backend data to frontend format
+    return {
+      currentUsage: powerKW > 0 ? powerKW : fallbackData.currentUsage,
+      batteryLevel: backendData.battery_percentage !== null && backendData.battery_percentage !== undefined 
+        ? backendData.battery_percentage 
+        : fallbackData.batteryLevel,
+      current: current || fallbackData.current,
+      efficiency: 92, // Not provided by backend, use fallback
+      temperature: backendData.temperature !== null && backendData.temperature !== undefined 
+        ? backendData.temperature 
+        : fallbackData.temperature,
+      voltage: voltage > 0 ? voltage : fallbackData.voltage,
+      status: backendData.inverter_status === 'ON' ? "Normal" : 
+              backendData.inverter_status === 'FAULT' ? "Fault" : 
+              backendData.inverter_status === 'OFF' ? "Off" : 
+              "Normal",
+      lastUpdated: backendData.lastUpdated ? new Date(backendData.lastUpdated) : new Date(),
+      monthlyUnitsConsumed: fallbackData.monthlyUnitsConsumed, // Not provided by backend, use fallback
+      savings: fallbackData.savings, // Not provided by backend, use fallback
+      isCharging: backendData.battery_percentage !== null && backendData.battery_percentage !== undefined
+        ? backendData.battery_percentage < 95 
+        : fallbackData.isCharging,
+      batteryPowerKW: fallbackData.batteryPowerKW, // Not provided by backend, use fallback
+    };
+  };
+
+  const dashboardData = getDashboardData();
+  
+  // Show loading indicator if initial load
+  const isInitialLoad = dashboardLoading && !dashboardResponse;
+  
+  // Check if we're using live data or fallback
+  const isUsingLiveData = !dashboardLoading && !dashboardError && !!dashboardResponse?.data;
 
   const handleMenuPress = () => {
     // Handle menu
@@ -182,27 +236,7 @@ export default function UserDashboard() {
           </Text>
         </TouchableOpacity>
 
-        {/* Welcome Header */}
-        <View style={{ marginBottom: 24 }}>
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontSize: 28,
-              fontWeight: "800",
-              marginBottom: 8,
-            }}
-          >
-            Welcome Back
-          </Text>
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontSize: 16,
-            }}
-          >
-            {user?.username || user?.email || "User"}
-          </Text>
-        </View>
+       
 
         {/* Status Card */}
         <View
@@ -227,7 +261,8 @@ export default function UserDashboard() {
                 width: 12,
                 height: 12,
                 borderRadius: 6,
-                backgroundColor: colors.success,
+                backgroundColor: dashboardData.status === "Normal" ? colors.success : 
+                                dashboardData.status === "Fault" ? colors.error : colors.warning,
                 marginRight: 12,
               }}
             />
@@ -240,6 +275,23 @@ export default function UserDashboard() {
             >
               System Status: {dashboardData.status}
             </Text>
+            {isInitialLoad && (
+              <View style={{ marginLeft: 8 }}>
+                <ActivityIndicator size="small" color={colors.accent} />
+              </View>
+            )}
+            {dashboardError && (
+              <Text
+                style={{
+                  color: colors.warning,
+                  fontSize: 11,
+                  marginLeft: 8,
+                  fontStyle: "italic",
+                }}
+              >
+                (Using fallback data)
+              </Text>
+            )}
           </View>
           <View
             style={{
@@ -257,6 +309,8 @@ export default function UserDashboard() {
               }}
             >
               Last updated: {dashboardData.lastUpdated.toLocaleTimeString()}
+              {isUsingLiveData && " (Live)"}
+              {dashboardError && " (Fallback)"}
             </Text>
           </View>
         </View>
