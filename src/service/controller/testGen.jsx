@@ -7,7 +7,8 @@ export const useSolarReadings = (enableLive = true) => {
       method: "GET",
       url: "/api/solar",
     }),
-    refetchInterval: enableLive ? 2000 : false, // auto refresh every 2s
-    staleTime: 1000,
+    refetchInterval: enableLive ? 3000 : false, // auto refresh every 3s (reduced from 2s to prevent freezing)
+    staleTime: 2000,
+    refetchIntervalInBackground: false, // Don't poll in background
   });
 };

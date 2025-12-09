@@ -94,10 +94,16 @@ export const useLiveTelemetry = ({
     },
     enabled: enabled && (!!deviceId || !!location), // Only enable if deviceId or location provided
     refetchInterval: enabled ? refetchInterval : false, // Poll every 3.9 seconds if enabled
-    refetchIntervalInBackground: true, // Continue polling when app is in background
+    refetchIntervalInBackground: false, // Don't poll in background to save battery and prevent freezing
     staleTime: 0, // Always consider data stale to ensure fresh data on every poll
     gcTime: 10000, // Keep data in cache for 10 seconds
-    retry: 2, // Retry failed requests 2 times
+    retry: (failureCount, error) => {
+      // Don't retry on network errors to prevent app freezing
+      if (error?.isNetworkError) {
+        return false;
+      }
+      return failureCount < 2;
+    },
     retryDelay: 1000, // Wait 1 second between retries
   });
 };

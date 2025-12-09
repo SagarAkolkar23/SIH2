@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -47,6 +47,9 @@ export default function RootNavigator() {
   
   // Always call hooks in the same order - don't conditionally call hooks
   const { initializeAndRegister } = useInitializeAndRegisterFCM();
+  
+  // Use ref to track if FCM token has been registered to prevent multiple registrations
+  const fcmTokenRegisteredRef = useRef(false);
 
   // Determine if user is controller (backend roles: SUPER_ADMIN, CONTROLLER, CONSUMER)
   const userRole = user?.role;
@@ -73,29 +76,29 @@ export default function RootNavigator() {
     };
 
     loadAuthState();
-  }, [setAuthData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
-  // Register FCM token when user is authenticated
+  // Register FCM token when user is authenticated (only once per login session)
   useEffect(() => {
-    if (token && user) {
+    // Only register if we have token/user and haven't registered yet
+    if (token && user && !fcmTokenRegisteredRef.current) {
+      fcmTokenRegisteredRef.current = true; // Mark as registered
+      
       // Initialize and register FCM token in background
       // This is non-blocking and will fail silently if permissions are denied
       initializeAndRegister().catch((error) => {
         // Silent fail - FCM initialization should not block app
       });
     }
-  }, [token, user, initializeAndRegister]);
-
-  // Log navigation state for debugging
-  useEffect(() => {
-    if (!isLoading) {
-      console.log('[ROOT NAVIGATOR] Navigation state updated');
-      console.log('[ROOT NAVIGATOR] Has token:', !!token);
-      console.log('[ROOT NAVIGATOR] User role:', userRole);
-      console.log('[ROOT NAVIGATOR] Is controller:', isController);
-      console.log('[ROOT NAVIGATOR] Showing:', !token ? 'Login' : isController ? 'ControllerMain' : 'UserMain');
+    
+    // Reset ref when user logs out
+    if (!token || !user) {
+      fcmTokenRegisteredRef.current = false;
     }
-  }, [token, userRole, isController, isLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, user]); // Only depend on token and user, not initializeAndRegister
+
 
   if (isLoading) {
     // Return a loading screen while checking auth

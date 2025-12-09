@@ -442,12 +442,7 @@ export default function Dashboard() {
               }
             />
 
-            <IndustrialStatusPanel
-              label="Solar Array Input"
-              value={`${generation.toFixed(2)} kW`}
-              icon={Sun}
-              severity={generation < 0.5 ? "warning" : "ok"}
-            />
+            
 
             <IndustrialStatusPanel
               label="Battery Health"

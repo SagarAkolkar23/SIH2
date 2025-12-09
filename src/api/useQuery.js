@@ -15,7 +15,11 @@ API_BASE_URL = API_BASE_URL.replace(/\/$/, "");
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
-  timeout: 10000, // 10 second timeout
+  timeout: 30000, // Increased to 30 seconds to handle slow network connections
+  validateStatus: function (status) {
+    // Don't throw errors for 4xx and 5xx, let components handle them
+    return status < 600;
+  },
 });
 
 // ---- REQUEST INTERCEPTOR ----
@@ -37,23 +41,32 @@ api.interceptors.request.use(async (config) => {
 // ---- RESPONSE INTERCEPTOR ----
 api.interceptors.response.use(
   (res) => {
-    // Only log FCM token related responses for debugging
-    if (res.config?.url?.includes('fcm-token')) {
-      console.log('[API RESPONSE] FCM Token endpoint response');
-      console.log('[API RESPONSE] URL:', res.config.url);
-      console.log('[API RESPONSE] Status:', res.status);
-      console.log('[API RESPONSE] Data:', res.data);
-    }
     return res;
   },
   async (err) => {
-    // Log errors for FCM token endpoint
-    if (err.config?.url?.includes('fcm-token')) {
-      console.log('[API ERROR] FCM Token endpoint error');
-      console.log('[API ERROR] URL:', err.config.url);
-      console.log('[API ERROR] Status:', err.response?.status);
-      console.log('[API ERROR] Data:', err.response?.data);
-      console.log('[API ERROR] Message:', err.message);
+    // Handle network errors gracefully (connection timeout, network unavailable, etc.)
+    if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT' || err.message?.includes('timeout')) {
+      // Network timeout - don't crash the app, just reject with a user-friendly error
+      const networkError = new Error('Network request timed out. Please check your connection and ensure the backend server is running.');
+      networkError.isNetworkError = true;
+      networkError.code = err.code || 'TIMEOUT';
+      return Promise.reject(networkError);
+    }
+    
+    // Handle connection errors (server not reachable)
+    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ENETUNREACH') {
+      const connectionError = new Error('Cannot connect to server. Please ensure the backend server is running at ' + API_BASE_URL);
+      connectionError.isNetworkError = true;
+      connectionError.code = err.code || 'CONNECTION_ERROR';
+      return Promise.reject(connectionError);
+    }
+    
+    // Handle SocketTimeoutException (Android specific)
+    if (err.message?.includes('SocketTimeoutException') || err.message?.includes('failed to connect')) {
+      const socketError = new Error('Connection failed. Please check that your device and server are on the same network and the backend is running.');
+      socketError.isNetworkError = true;
+      socketError.code = 'SOCKET_TIMEOUT';
+      return Promise.reject(socketError);
     }
     
     if (err.response?.status === 401) {
@@ -81,6 +94,19 @@ api.interceptors.response.use(
 export const useCustomQuery = (options) => {
   return useQuery({
     ...options,
+    // Don't retry on network errors - fail fast to prevent app freezing
+    retry: (failureCount, error) => {
+      // Don't retry if it's a network error (connection timeout, etc.)
+      if (error?.isNetworkError) {
+        return false;
+      }
+      // Use provided retry count or default to 2
+      return failureCount < (options.retry || 2);
+    },
+    retryDelay: (attemptIndex) => {
+      // Exponential backoff, but cap at 5 seconds
+      return Math.min(1000 * Math.pow(2, attemptIndex), 5000);
+    },
     queryFn: async () => {
       // Call the original queryFn and await it (in case it's async)
       let requestConfig;

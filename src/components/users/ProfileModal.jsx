@@ -24,27 +24,20 @@ const ProfileModal = ({ visible, onClose }) => {
 
   const handleLogout = async () => {
     try {
-      console.log('[PROFILE MODAL] Logout button pressed');
-      console.log('[PROFILE MODAL] User:', user?.email);
-      console.log('[PROFILE MODAL] User Role:', user?.role);
-      
       // Close modal first
       onClose();
       
       // Use logout API which removes FCM token from backend and clears auth
       // RootNavigator will automatically show Login screen when token becomes null
       await logoutApi.mutateAsync();
-      
-      console.log('[PROFILE MODAL] ✅ Logout completed - RootNavigator will handle navigation');
     } catch (error) {
-      console.log('[PROFILE MODAL] ❌ Error during logout:', error.message);
       // Even if there's an error, try to clear auth state
       // RootNavigator will handle navigation based on token state
       try {
         const { useAuthStore } = await import('../../store/authStore');
         await useAuthStore.getState().clearAuth();
       } catch (clearError) {
-        console.log('[PROFILE MODAL] Failed to clear auth:', clearError.message);
+        // Failed to clear auth
       }
     }
   };

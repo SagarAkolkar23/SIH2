@@ -21,14 +21,8 @@ export const useUserDashboardQuery = (houseId = null) => {
     queryKey: [...DASHBOARD_KEYS.dashboard, targetHouseId],
     queryFn: () => {
       if (!targetHouseId) {
-        console.log('[USER DASHBOARD] ❌ House ID is required');
         throw new Error("House ID is required");
       }
-      
-      console.log('[USER DASHBOARD] Fetching dashboard data...');
-      console.log('[USER DASHBOARD] House ID:', targetHouseId);
-      console.log('[USER DASHBOARD] User:', user?.email);
-      console.log('[USER DASHBOARD] User Role:', user?.role);
       
       return {
         method: "GET",
@@ -36,23 +30,16 @@ export const useUserDashboardQuery = (houseId = null) => {
       };
     },
     enabled: !!targetHouseId && !!user,
-    staleTime: 0, // Always consider data stale to ensure fresh data
-    refetchInterval: 1000, // Refetch every 3 seconds
-    retry: 2,
+    staleTime: 2000, // Consider data fresh for 2 seconds
+    refetchInterval: 3000, // Refetch every 3 seconds (was incorrectly set to 1000ms)
+    refetchIntervalInBackground: false, // Don't poll in background to save battery
+    retry: (failureCount, error) => {
+      // Don't retry on network errors to prevent app freezing
+      if (error?.isNetworkError) {
+        return false;
+      }
+      return failureCount < 2;
+    },
     retryDelay: 1000,
-    onSuccess: (data) => {
-      console.log('[USER DASHBOARD] ✅ Dashboard data received');
-      console.log('[USER DASHBOARD] Response structure:', {
-        hasSuccess: !!data?.success,
-        hasData: !!data?.data,
-        dataKeys: data?.data ? Object.keys(data.data) : []
-      });
-    },
-    onError: (error) => {
-      console.log('[USER DASHBOARD] ❌ Error fetching dashboard data');
-      console.log('[USER DASHBOARD] Error message:', error.message);
-      console.log('[USER DASHBOARD] Error response:', error.response?.data);
-      console.log('[USER DASHBOARD] Error status:', error.response?.status);
-    },
   });
 };

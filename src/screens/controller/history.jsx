@@ -7,7 +7,37 @@ import {
   SafeAreaView,
   Alert,
   Share,
+  ActivityIndicator,
+  RefreshControl,
+  Platform,
 } from "react-native";
+
+// Conditionally import native modules (they may not be available in all builds)
+let FileSystem = null;
+let FileSystemNew = null; // New API
+let Sharing = null;
+
+try {
+  // Try legacy API first (for writeAsStringAsync)
+  FileSystem = require('expo-file-system/legacy');
+  console.log('[HISTORY] FileSystem legacy module loaded');
+} catch (error) {
+  console.warn('[HISTORY] Legacy API not available:', error.message);
+}
+
+try {
+  // Try new API as well (for File/Directory classes)
+  FileSystemNew = require('expo-file-system/next');
+  console.log('[HISTORY] FileSystem new API module loaded');
+} catch (error) {
+  console.warn('[HISTORY] New API not available:', error.message);
+}
+
+try {
+  Sharing = require('expo-sharing');
+} catch (error) {
+  console.warn('[HISTORY] Sharing module not available:', error.message);
+}
 import {
   TrendingUp,
   Zap,
@@ -22,6 +52,7 @@ import ActionButtonsRow from "../../components/controller/history/ActionButtonsR
 import HistoryChartCard from "../../components/controller/history/HistoryChartCard";
 import DownloadButton from "../../components/controller/history/DownloadButton";
 import { useThemeStore } from "../../store/themeStore";
+import { useGridHistoricalData, downloadGridHistoricalData } from "../../service/controller/historyService";
 
 // Generate mock historical data
 const generateHistoricalData = () => {
@@ -64,6 +95,64 @@ export default function History() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Calculate date range from filter
+  const getDateRange = useMemo(() => {
+    const now = new Date();
+    let startDate = null;
+    let endDate = now.toISOString();
+    let granularity = 'day';
+
+    switch (dateFilter) {
+      case "today":
+        startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+        granularity = 'hour';
+        break;
+      case "last7days":
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 7);
+        granularity = 'day';
+        break;
+      case "last30days":
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 30);
+        granularity = 'day';
+        break;
+      case "thisMonth":
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        granularity = 'day';
+        break;
+      case "lastMonth":
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0).toISOString();
+        granularity = 'day';
+        break;
+      case "last3months":
+        startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 3);
+        granularity = 'week';
+        break;
+      default:
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 7);
+    }
+
+    return {
+      start: startDate ? startDate.toISOString() : null,
+      end: endDate,
+      granularity
+    };
+  }, [dateFilter]);
+
+  // Fetch historical data from backend
+  const { data: historyResponse, isLoading: isLoadingHistory, error: historyError, refetch } = useGridHistoricalData({
+    start: getDateRange.start,
+    end: getDateRange.end,
+    granularity: getDateRange.granularity,
+    enabled: true
+  });
+
+  // Fallback mock data
   const historicalData = useMemo(() => generateHistoricalData(), []);
 
   // Get filter labels
@@ -84,11 +173,11 @@ export default function History() {
     return areaFilter;
   };
 
-  // Filter data based on selections
-  const filteredData = useMemo(() => {
+  // Filter mock data for fallback
+  const filteredMockData = useMemo(() => {
     let filtered = [...historicalData];
-
     const now = new Date();
+    
     switch (dateFilter) {
       case "today":
         filtered = filtered.filter((d) => {
@@ -140,11 +229,11 @@ export default function History() {
     return filtered;
   }, [historicalData, dateFilter, areaFilter]);
 
-  // Prepare chart data
-  const prepareChartData = (dataKey) => {
+  // Prepare mock chart data
+  const prepareMockChartData = (dataKey) => {
     const groupedData = {};
 
-    filteredData.forEach((item) => {
+    filteredMockData.forEach((item) => {
       const dateKey = item.timestamp.toLocaleDateString();
       if (!groupedData[dateKey]) {
         groupedData[dateKey] = { sum: 0, count: 0 };
@@ -169,11 +258,39 @@ export default function History() {
     return { labels, data };
   };
 
-  const voltageData = prepareChartData("voltage");
-  const currentData = prepareChartData("current");
-  const powerData = prepareChartData("power");
-  const batteryData = prepareChartData("battery");
-  const solarData = prepareChartData("solarInput");
+  // Get chart data from backend or fallback to mock
+  const getChartData = useMemo(() => {
+    // Use backend data if available
+    if (historyResponse?.data?.aggregatedData) {
+      const backendData = historyResponse.data.aggregatedData;
+      return {
+        voltage: backendData.voltage || { labels: [], data: [] },
+        current: backendData.current || { labels: [], data: [] },
+        power: backendData.power || { labels: [], data: [] },
+        battery: backendData.battery || { labels: [], data: [] },
+        solarInput: backendData.solarInput || { labels: [], data: [] },
+        isUsingLiveData: true,
+        recordCount: historyResponse.data.count || 0
+      };
+    }
+
+    // Fallback to mock data
+    return {
+      voltage: prepareMockChartData("voltage"),
+      current: prepareMockChartData("current"),
+      power: prepareMockChartData("power"),
+      battery: prepareMockChartData("battery"),
+      solarInput: prepareMockChartData("solarInput"),
+      isUsingLiveData: false,
+      recordCount: filteredMockData.length
+    };
+  }, [historyResponse, filteredMockData]);
+
+  const voltageData = getChartData.voltage;
+  const currentData = getChartData.current;
+  const powerData = getChartData.power;
+  const batteryData = getChartData.battery;
+  const solarData = getChartData.solarInput;
 
   // Handlers
   const handleApplyFilters = (date, area) => {
@@ -181,23 +298,202 @@ export default function History() {
     setAreaFilter(area);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     Alert.alert(
       "Download Report",
       `Ready to download ${
-        filteredData.length
+        getChartData.recordCount
       } records\n\nFormat: Excel (.xlsx)\nDate Range: ${getDateFilterLabel()}\nLocation: ${getAreaFilterLabel()}`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Download",
-          onPress: () => {
-            setTimeout(() => {
+          onPress: async () => {
+            try {
+              // Download the file using the service (handles auth automatically)
+              const arrayBuffer = await downloadGridHistoricalData({
+                start: getDateRange.start,
+                end: getDateRange.end,
+                granularity: getDateRange.granularity,
+              });
+
+              // Generate filename
+              const fromDate = getDateRange.start ? new Date(getDateRange.start).toISOString().split('T')[0] : 'start';
+              const toDate = getDateRange.end ? new Date(getDateRange.end).toISOString().split('T')[0] : 'end';
+              const filename = `grid_history_${fromDate}_to_${toDate}.xlsx`;
+              const fileSize = Math.round((arrayBuffer.byteLength || arrayBuffer.length) / 1024);
+
+              if (Platform.OS === 'web') {
+                // For web, create a blob URL and trigger download
+                const blob = new Blob([arrayBuffer], { 
+                  type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+                });
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+                
+                Alert.alert(
+                  "Download Complete",
+                  `Report downloaded successfully!\n\n` +
+                  `File: ${filename}\n` +
+                  `Records: ${getChartData.recordCount}\n` +
+                  `Date Range: ${getDateFilterLabel()}\n` +
+                  `Size: ${fileSize} KB`
+                );
+              } else {
+                // For React Native, save file to device storage and allow sharing
+                // Check if native modules are available
+                if (!FileSystem || !Sharing) {
+                  // Fallback: Show success message and suggest rebuilding
+                  Alert.alert(
+                    "Download Complete",
+                    `Report downloaded successfully!\n\n` +
+                    `File: ${filename}\n` +
+                    `Records: ${getChartData.recordCount}\n` +
+                    `Date Range: ${getDateFilterLabel()}\n` +
+                    `Size: ${fileSize} KB\n\n` +
+                    `Note: To save files to device storage, please rebuild your development build with:\n` +
+                    `npx expo install expo-file-system expo-sharing\n` +
+                    `Then rebuild: npx expo run:android or npx expo run:ios`
+                  );
+                  return;
+                }
+
+                try {
+                  // Convert ArrayBuffer to base64
+                  const bytes = new Uint8Array(arrayBuffer);
+                  
+                  // Use a more efficient base64 encoding
+                  let base64 = '';
+                  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                  
+                  for (let i = 0; i < bytes.length; i += 3) {
+                    const a = bytes[i];
+                    const b = bytes[i + 1] || 0;
+                    const c = bytes[i + 2] || 0;
+                    const bitmap = (a << 16) | (b << 8) | c;
+                    base64 += chars.charAt((bitmap >> 18) & 63);
+                    base64 += chars.charAt((bitmap >> 12) & 63);
+                    base64 += i + 1 < bytes.length ? chars.charAt((bitmap >> 6) & 63) : '=';
+                    base64 += i + 2 < bytes.length ? chars.charAt(bitmap & 63) : '=';
+                  }
+
+                  // Save file to device storage
+                  // Try new API first, fallback to legacy
+                  let fileUri;
+                  let saved = false;
+                  
+                  // Get document directory from whichever API is available
+                  const documentDir = FileSystem?.documentDirectory || FileSystemNew?.documentDirectory;
+                  
+                  if (!documentDir) {
+                    throw new Error('Document directory not available');
+                  }
+                  
+                  if (FileSystemNew) {
+                    // Use new API (expo-file-system/next)
+                    try {
+                      const { File, EncodingType } = FileSystemNew;
+                      fileUri = `${documentDir}${filename}`;
+                      
+                      // Ensure file:// protocol
+                      if (!fileUri.startsWith('file://')) {
+                        fileUri = `file://${fileUri}`;
+                      }
+                      
+                      const file = new File(fileUri);
+                      await file.write(base64, { encoding: EncodingType.Base64 });
+                      console.log('[HISTORY DOWNLOAD] File saved using new API to:', fileUri);
+                      saved = true;
+                    } catch (newApiError) {
+                      console.warn('[HISTORY DOWNLOAD] New API failed, trying legacy:', newApiError.message);
+                    }
+                  }
+                  
+                  if (!saved && FileSystem) {
+                    // Fallback to legacy API (expo-file-system/legacy)
+                    fileUri = `${documentDir}${filename}`;
+                    console.log('[HISTORY DOWNLOAD] Saving file using legacy API to:', fileUri);
+                    
+                    // Use legacy API's writeAsStringAsync with Base64 encoding
+                    await FileSystem.writeAsStringAsync(fileUri, base64, {
+                      encoding: FileSystem.EncodingType.Base64,
+                    });
+                    
+                    console.log('[HISTORY DOWNLOAD] File saved successfully using legacy API');
+                    saved = true;
+                  }
+                  
+                  if (!saved) {
+                    throw new Error('Neither new nor legacy FileSystem API is available');
+                  }
+
+                  // Check if sharing is available
+                  const isAvailable = await Sharing.isAvailableAsync();
+                  
+                  if (isAvailable) {
+                    // Show options: Share or just save
+                    Alert.alert(
+                      "Download Complete",
+                      `Report saved successfully!\n\n` +
+                      `File: ${filename}\n` +
+                      `Records: ${getChartData.recordCount}\n` +
+                      `Date Range: ${getDateFilterLabel()}\n` +
+                      `Size: ${fileSize} KB\n\n` +
+                      `Would you like to share this file?`,
+                      [
+                        {
+                          text: "Keep Only",
+                          style: "cancel",
+                        },
+                        {
+                          text: "Share",
+                          onPress: async () => {
+                            try {
+                              await Sharing.shareAsync(fileUri, {
+                                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                dialogTitle: 'Share Grid History Report',
+                              });
+                            } catch (shareError) {
+                              Alert.alert("Error", "Failed to share file");
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  } else {
+                    // Sharing not available, just confirm save
+                    Alert.alert(
+                      "Download Complete",
+                      `Report saved successfully!\n\n` +
+                      `File: ${filename}\n` +
+                      `Records: ${getChartData.recordCount}\n` +
+                      `Date Range: ${getDateFilterLabel()}\n` +
+                      `Size: ${fileSize} KB\n\n` +
+                      `File saved to: ${fileUri}`
+                    );
+                  }
+                } catch (saveError) {
+                  console.error("File save error:", saveError);
+                  Alert.alert(
+                    "Save Failed",
+                    `Failed to save file to device storage.\n\n${saveError.message}`
+                  );
+                }
+              }
+            } catch (error) {
+              console.error("Download error:", error);
               Alert.alert(
-                "Success",
-                "Report downloaded successfully!\n\nSaved to: Downloads/solar_report.xlsx"
+                "Download Failed",
+                error.response?.data?.message || error.message || "Failed to download the report. Please try again."
               );
-            }, 1000);
+            }
           },
         },
       ]
@@ -208,7 +504,7 @@ export default function History() {
     try {
       await Share.share({
         message: `Solar Microgrid Report\n\nDate Range: ${getDateFilterLabel()}\nLocation: ${getAreaFilterLabel()}\nRecords: ${
-          filteredData.length
+          getChartData.recordCount
         }\n\nGenerated on ${new Date().toLocaleString()}`,
         title: "Solar Microgrid Report",
       });
@@ -219,10 +515,13 @@ export default function History() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => {
+    refetch().then(() => {
       setIsRefreshing(false);
       Alert.alert("Refreshed", "Data updated successfully");
-    }, 1500);
+    }).catch(() => {
+      setIsRefreshing(false);
+      Alert.alert("Error", "Failed to refresh data");
+    });
   };
 
   // Chart configurations for different colors
@@ -269,12 +568,22 @@ export default function History() {
         onSettingsPress={() => Alert.alert("Settings", "Settings pressed")}
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+      <ScrollView 
+        style={{ flex: 1 }} 
+        contentContainerStyle={{ padding: 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+          />
+        }
+      >
         {/* Filter Summary Card */}
         <FilterSummaryCard
           dateLabel={getDateFilterLabel()}
           areaLabel={getAreaFilterLabel()}
-          recordCount={filteredData.length}
+          recordCount={getChartData.recordCount}
           onPress={() => setShowFilterModal(true)}
         />
 
@@ -349,10 +658,60 @@ export default function History() {
           chartConfig={createChartConfig("rgba(245, 158, 11, 1)")}
         />
 
+        {/* Loading Indicator */}
+        {isLoadingHistory && (
+          <View style={{
+            backgroundColor: colors.surface,
+            borderRadius: 12,
+            padding: 20,
+            marginBottom: 16,
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 12 }}>
+              Loading historical data...
+            </Text>
+          </View>
+        )}
+
+        {/* Error Message */}
+        {historyError && !isLoadingHistory && (
+          <View style={{
+            backgroundColor: colors.surface,
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: colors.error || '#ef4444',
+          }}>
+            <Text style={{ color: colors.error || '#ef4444', fontSize: 12, textAlign: 'center' }}>
+              Failed to load historical data. Using fallback data.
+            </Text>
+          </View>
+        )}
+
+        {/* Data Source Indicator */}
+        {!isLoadingHistory && !historyError && getChartData.isUsingLiveData && (
+          <View style={{
+            backgroundColor: colors.surface,
+            borderRadius: 12,
+            padding: 12,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: colors.success || '#22c55e',
+          }}>
+            <Text style={{ color: colors.success || '#22c55e', fontSize: 11, textAlign: 'center' }}>
+              ✓ Showing live historical data from backend
+            </Text>
+          </View>
+        )}
+
         {/* Download Button */}
         <DownloadButton
           onPress={handleDownload}
-          recordCount={filteredData.length}
+          recordCount={getChartData.recordCount}
           dateLabel={getDateFilterLabel()}
           areaLabel={getAreaFilterLabel()}
         />

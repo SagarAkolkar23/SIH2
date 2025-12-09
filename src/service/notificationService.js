@@ -17,97 +17,90 @@ try {
       shouldSetBadge: true,
     }),
   });
+  console.log('[FCM TOKEN LOGS] ✅ Notification handler configured successfully');
 } catch (err) {
-  console.log("[⚠️ FCM] Notification handler failed:", err.message);
+  console.log('[FCM TOKEN LOGS] ❌ Failed to set notification handler:', err.message);
 }
 
 
 // ----- PERMISSIONS -----
 export const requestNotificationPermissions = async () => {
   try {
-    console.log("[🔐 FCM PERMISSIONS] Checking notification permissions...");
+    console.log('[FCM TOKEN LOGS] ========================================');
+    console.log('[FCM TOKEN LOGS] Checking notification permissions...');
+    console.log('[FCM TOKEN LOGS] Platform:', Platform.OS);
+    
     let { status } = await Notifications.getPermissionsAsync();
-    console.log("[🔐 FCM PERMISSIONS] Current permission status:", status);
+    console.log('[FCM TOKEN LOGS] Current permission status:', status);
 
     if (status !== "granted") {
-      console.log("[🔐 FCM PERMISSIONS] Permissions not granted, requesting...");
+      console.log('[FCM TOKEN LOGS] Permission not granted, requesting...');
       const permissionResult = await Notifications.requestPermissionsAsync();
       status = permissionResult.status;
-      console.log("[🔐 FCM PERMISSIONS] Permission request result:", status);
-      console.log("[🔐 FCM PERMISSIONS] Permission details:", JSON.stringify(permissionResult, null, 2));
-    } else {
-      console.log("[🔐 FCM PERMISSIONS] ✅ Permissions already granted");
+      console.log('[FCM TOKEN LOGS] Permission request result:', status);
     }
 
     const granted = status === "granted";
-    console.log("[🔐 FCM PERMISSIONS] Final permission status:", granted ? "✅ GRANTED" : "❌ DENIED");
+    console.log('[FCM TOKEN LOGS] Permission granted:', granted);
+    console.log('[FCM TOKEN LOGS] ========================================');
     return granted;
   } catch (error) {
-    console.log("[❌ FCM] Permission error:", error.message);
-    console.log("[❌ FCM] Permission error stack:", error.stack);
+    console.log('[FCM TOKEN LOGS] ❌ Error requesting permissions:', error.message);
+    console.log('[FCM TOKEN LOGS] Error stack:', error.stack);
     return false;
   }
 };
 
 
 // ----- TOKEN GENERATION -----
+// Generate native FCM token (compatible with Firebase Admin SDK)
 export const getExpoPushToken = async () => {
+  console.log('[FCM TOKEN LOGS] ========================================');
+  console.log('[FCM TOKEN LOGS] Starting FCM token generation...');
+  console.log('[FCM TOKEN LOGS] Platform:', Platform.OS);
+  console.log('[FCM TOKEN LOGS] Project ID:', Constants?.expoConfig?.extra?.eas?.projectId || 'Not found');
+  
   try {
-    console.log("[🔑 FCM TOKEN] Starting token generation process...");
-    
     const permissionGranted = await requestNotificationPermissions();
     if (!permissionGranted) {
-      console.log("[🔑 FCM TOKEN] ❌ Permissions not granted, cannot generate token");
+      console.log('[FCM TOKEN LOGS] ❌ Token generation failed: Permissions not granted');
+      console.log('[FCM TOKEN LOGS] ========================================');
       return null;
     }
 
-    console.log("[🔑 FCM TOKEN] ✅ Permissions granted, proceeding with token generation");
-
-    // Auto detect project ID from app.json (required for dev build)
-    const projectId =
-      Constants?.expoConfig?.extra?.eas?.projectId ||
-      Constants?.expoConfig?.extra?.projectId ||
-      Constants?.easConfig?.projectId ||
-      process.env.EXPO_PROJECT_ID;
-
-    console.log("[🔑 FCM TOKEN] Project ID check:");
-    console.log("  - Constants.expoConfig?.extra?.eas?.projectId:", Constants?.expoConfig?.extra?.eas?.projectId || "Not found");
-    console.log("  - Constants.expoConfig?.extra?.projectId:", Constants?.expoConfig?.extra?.projectId || "Not found");
-    console.log("  - Constants.easConfig?.projectId:", Constants?.easConfig?.projectId || "Not found");
-    console.log("  - process.env.EXPO_PROJECT_ID:", process.env.EXPO_PROJECT_ID || "Not found");
-    console.log("[🔑 FCM TOKEN] Final Project ID:", projectId || "❌ NOT FOUND");
-
-    if (!projectId) {
-      console.log("[🔑 FCM TOKEN] ⚠️ No projectId found - attempting without it (may fail in dev build)");
-    }
-
-    console.log("[🔑 FCM TOKEN] Requesting Expo push token...");
-    const tokenData = projectId
-      ? await Notifications.getExpoPushTokenAsync({ projectId })
-      : await Notifications.getExpoPushTokenAsync();
-
-    console.log("[🔑 FCM TOKEN] Token data received:", tokenData ? "Yes" : "No");
-    if (tokenData) {
-      console.log("[🔑 FCM TOKEN] Token data structure:", JSON.stringify(tokenData, null, 2));
-    }
+    console.log('[FCM TOKEN LOGS] ✅ Permissions granted, generating native FCM token...');
+    console.log('[FCM TOKEN LOGS] Using getDevicePushTokenAsync() for native token...');
+    
+    // USE NATIVE FCM TOKEN (compatible with Firebase Admin SDK)
+    const tokenData = await Notifications.getDevicePushTokenAsync();
+    console.log('[FCM TOKEN LOGS] Token data received:', {
+      hasData: !!tokenData?.data,
+      type: tokenData?.type || 'unknown',
+      dataLength: tokenData?.data?.length || 0,
+      dataPrefix: tokenData?.data?.substring(0, 20) || 'N/A'
+    });
 
     if (!tokenData?.data) {
-      console.log("[🔑 FCM TOKEN] ❌ No token data in response");
+      console.log('[FCM TOKEN LOGS] ❌ Token generation failed: No token data received');
+      console.log('[FCM TOKEN LOGS] Token data object:', JSON.stringify(tokenData));
+      console.log('[FCM TOKEN LOGS] ========================================');
       return null;
     }
 
     const token = tokenData.data;
-    console.log("[🔑 FCM TOKEN] ✅ Token generated successfully");
-    console.log("[🔑 FCM TOKEN] Token length:", token.length);
-    console.log("[🔑 FCM TOKEN] Token (first 50 chars):", token.substring(0, 50) + "...");
-    console.log("[🔑 FCM TOKEN] Token (last 20 chars):", "..." + token.substring(token.length - 20));
+    console.log('[FCM TOKEN LOGS] ✅ FCM token generated successfully');
+    console.log('[FCM TOKEN LOGS] Token type:', tokenData.type || 'FCM');
+    console.log('[FCM TOKEN LOGS] Token length:', token.length);
+    console.log('[FCM TOKEN LOGS] Token preview:', token.substring(0, 30) + '...');
+    console.log('[FCM TOKEN LOGS] ========================================');
     
     return token;
   } catch (error) {
-    console.log("[❌ FCM TOKEN ERROR]:", error.message);
-    console.log("[❌ FCM TOKEN ERROR] Error code:", error.code);
-    console.log("[❌ FCM TOKEN ERROR] Error name:", error.name);
-    console.log("[❌ FCM TOKEN ERROR] Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    console.log('[FCM TOKEN LOGS] ❌ Exception during token generation:');
+    console.log('[FCM TOKEN LOGS] Error message:', error.message);
+    console.log('[FCM TOKEN LOGS] Error code:', error.code || 'N/A');
+    console.log('[FCM TOKEN LOGS] Error stack:', error.stack);
+    console.log('[FCM TOKEN LOGS] ========================================');
     return null;
   }
 };
@@ -116,54 +109,74 @@ export const getExpoPushToken = async () => {
 // ----- STORAGE HELPERS -----
 export const storeFCMToken = async (token) => {
   try {
+    console.log('[FCM TOKEN LOGS] Storing FCM token in AsyncStorage...');
     await AsyncStorage.setItem(NOTIFICATION_TOKEN_KEY, token);
-  } catch {}
+    console.log('[FCM TOKEN LOGS] ✅ Token stored successfully');
+    console.log('[FCM TOKEN LOGS] Storage key:', NOTIFICATION_TOKEN_KEY);
+  } catch (error) {
+    console.log('[FCM TOKEN LOGS] ❌ Failed to store token:', error.message);
+  }
 };
 
 export const getStoredFCMToken = async () => {
   try {
-    return await AsyncStorage.getItem(NOTIFICATION_TOKEN_KEY);
-  } catch {
+    console.log('[FCM TOKEN LOGS] Retrieving stored FCM token from AsyncStorage...');
+    const token = await AsyncStorage.getItem(NOTIFICATION_TOKEN_KEY);
+    if (token) {
+      console.log('[FCM TOKEN LOGS] ✅ Stored token found');
+      console.log('[FCM TOKEN LOGS] Token length:', token.length);
+      console.log('[FCM TOKEN LOGS] Token preview:', token.substring(0, 30) + '...');
+    } else {
+      console.log('[FCM TOKEN LOGS] ⚠️ No stored token found');
+    }
+    return token;
+  } catch (error) {
+    console.log('[FCM TOKEN LOGS] ❌ Error retrieving stored token:', error.message);
     return null;
   }
 };
 
 export const removeFCMToken = async () => {
   try {
+    console.log('[FCM TOKEN LOGS] Removing FCM token from AsyncStorage...');
     await AsyncStorage.removeItem(NOTIFICATION_TOKEN_KEY);
-  } catch {}
+    console.log('[FCM TOKEN LOGS] ✅ Token removed successfully');
+  } catch (error) {
+    console.log('[FCM TOKEN LOGS] ❌ Failed to remove token:', error.message);
+  }
 };
 
 
 // ----- MAIN INITIALIZER -----
 export const initializeNotifications = async () => {
-  console.log("[⚙️ FCM INIT] ========================================");
-  console.log("[⚙️ FCM INIT] Starting notification setup...");
-  console.log("[⚙️ FCM INIT] Platform:", Platform.OS);
-  console.log("[⚙️ FCM INIT] ========================================");
-
+  console.log('[FCM TOKEN LOGS] ========================================');
+  console.log('[FCM TOKEN LOGS] Initializing notifications...');
+  const startTime = Date.now();
+  
   try {
     const token = await getExpoPushToken();
 
     if (token) {
-      console.log("[⚙️ FCM INIT] Token obtained, storing in AsyncStorage...");
       await storeFCMToken(token);
-      console.log("[⚙️ FCM INIT] ✅ Token stored in AsyncStorage successfully");
-      console.log("[⚙️ FCM INIT] Token key:", NOTIFICATION_TOKEN_KEY);
+      const duration = Date.now() - startTime;
+      console.log('[FCM TOKEN LOGS] ✅ Notification initialization completed');
+      console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+      console.log('[FCM TOKEN LOGS] ========================================');
+      return token;
     } else {
-      console.log("[⚙️ FCM INIT] ❌ No token generated - check permissions and projectId");
-      console.log("[⚙️ FCM INIT] Possible issues:");
-      console.log("  1. Notification permissions not granted");
-      console.log("  2. Project ID not configured");
-      console.log("  3. Expo notifications not properly initialized");
+      const duration = Date.now() - startTime;
+      console.log('[FCM TOKEN LOGS] ❌ Notification initialization failed: No token generated');
+      console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+      console.log('[FCM TOKEN LOGS] ========================================');
+      return null;
     }
-
-    console.log("[⚙️ FCM INIT] ========================================");
-    return token;
   } catch (error) {
-    console.log("[⚙️ FCM INIT] ❌ Error during initialization:", error.message);
-    console.log("[⚙️ FCM INIT] Error stack:", error.stack);
-    console.log("[⚙️ FCM INIT] ========================================");
+    const duration = Date.now() - startTime;
+    console.log('[FCM TOKEN LOGS] ❌ Exception during notification initialization:');
+    console.log('[FCM TOKEN LOGS] Error message:', error.message);
+    console.log('[FCM TOKEN LOGS] Error stack:', error.stack);
+    console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+    console.log('[FCM TOKEN LOGS] ========================================');
     return null;
   }
 };
@@ -172,16 +185,24 @@ export const initializeNotifications = async () => {
 // ----- LISTENERS -----
 export const addNotificationReceivedListener = (callback) => {
   try {
-    return Notifications.addNotificationReceivedListener(callback);
-  } catch {
+    console.log('[FCM TOKEN LOGS] Adding notification received listener...');
+    const subscription = Notifications.addNotificationReceivedListener(callback);
+    console.log('[FCM TOKEN LOGS] ✅ Notification received listener added');
+    return subscription;
+  } catch (error) {
+    console.log('[FCM TOKEN LOGS] ❌ Failed to add notification received listener:', error.message);
     return { remove: () => {} };
   }
 };
 
 export const addNotificationResponseListener = (callback) => {
   try {
-    return Notifications.addNotificationResponseReceivedListener(callback);
-  } catch {
+    console.log('[FCM TOKEN LOGS] Adding notification response listener...');
+    const subscription = Notifications.addNotificationResponseReceivedListener(callback);
+    console.log('[FCM TOKEN LOGS] ✅ Notification response listener added');
+    return subscription;
+  } catch (error) {
+    console.log('[FCM TOKEN LOGS] ❌ Failed to add notification response listener:', error.message);
     return { remove: () => {} };
   }
 };
@@ -194,18 +215,29 @@ export const createNotificationChannel = async (
   description = "General Notifications",
   options = {}
 ) => {
-  if (Platform.OS !== "android") return;
+  if (Platform.OS !== "android") {
+    console.log('[FCM TOKEN LOGS] Skipping Android channel creation - not Android platform');
+    return;
+  }
 
-  await Notifications.setNotificationChannelAsync(channelId, {
-    name,
-    description,
-    importance: options.importance || AndroidImportance.HIGH,
-    vibrationPattern: [0, 250, 250, 250],
-    lightColor: "#FF231F7C",
-    ...options,
-  });
-
-  console.log(`[📡 FCM] Notification channel "${channelId}" ready`);
+  try {
+    console.log('[FCM TOKEN LOGS] Creating Android notification channel...');
+    console.log('[FCM TOKEN LOGS] Channel ID:', channelId);
+    console.log('[FCM TOKEN LOGS] Channel Name:', name);
+    
+    await Notifications.setNotificationChannelAsync(channelId, {
+      name,
+      description,
+      importance: options.importance || AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#FF231F7C",
+      ...options,
+    });
+    
+    console.log('[FCM TOKEN LOGS] ✅ Android notification channel created successfully');
+  } catch (error) {
+    console.log('[FCM TOKEN LOGS] ❌ Failed to create Android notification channel:', error.message);
+  }
 };
 
 

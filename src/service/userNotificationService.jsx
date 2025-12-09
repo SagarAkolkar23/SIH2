@@ -12,43 +12,46 @@ export const useRegisterFCMToken = () => {
 
   return useMutation({
     mutationFn: async (token) => {
+      const startTime = Date.now();
+      console.log('[FCM TOKEN LOGS] ========================================');
+      console.log('[FCM TOKEN LOGS] Starting FCM token registration with backend...');
+      console.log('[FCM TOKEN LOGS] Token length:', token?.length || 0);
+      console.log('[FCM TOKEN LOGS] Token preview:', token?.substring(0, 30) || 'N/A', '...');
+      
       if (!token) {
-        console.log('[FCM API] ❌ FCM token is required');
+        console.log('[FCM TOKEN LOGS] ❌ Registration failed: Token is required');
+        console.log('[FCM TOKEN LOGS] ========================================');
         throw new Error('FCM token is required');
       }
 
-      // Get current user info for logging
-      const user = useAuthStore.getState().user;
-      console.log('[FCM API] ========================================');
-      console.log('[FCM API] Sending FCM token to backend...');
-      console.log('[FCM API] User Role:', user?.role);
-      console.log('[FCM API] User Email:', user?.email);
-      console.log('[FCM API] User ID:', user?._id);
-      console.log('[FCM API] Endpoint: PUT /api/profile/fcm-token');
-      console.log('[FCM API] Token (first 30 chars):', token.substring(0, 30) + '...');
-
       try {
+        console.log('[FCM TOKEN LOGS] Sending PUT request to /api/profile/fcm-token...');
+        
         const response = await api.put('/api/profile/fcm-token', {
           fcmToken: token,
         });
 
-        console.log('[FCM API] ✅ Backend response received');
-        console.log('[FCM API] Response status:', response.status);
-        console.log('[FCM API] Response data:', JSON.stringify(response.data, null, 2));
-        console.log('[FCM API] ========================================');
+        const duration = Date.now() - startTime;
+        console.log('[FCM TOKEN LOGS] ✅ Token registration successful');
+        console.log('[FCM TOKEN LOGS] Response status:', response?.status || 'N/A');
+        console.log('[FCM TOKEN LOGS] Response data:', JSON.stringify(response?.data || {}).substring(0, 200));
+        console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+        console.log('[FCM TOKEN LOGS] ========================================');
 
         return response.data;
       } catch (error) {
-        console.log('[FCM API] ❌ Error sending FCM token to backend');
-        console.log('[FCM API] Error message:', error.message);
-        console.log('[FCM API] Error response:', error.response?.data);
-        console.log('[FCM API] Error status:', error.response?.status);
-        console.log('[FCM API] Full error:', error);
-        console.log('[FCM API] ========================================');
+        const duration = Date.now() - startTime;
+        console.log('[FCM TOKEN LOGS] ❌ Token registration failed:');
+        console.log('[FCM TOKEN LOGS] Error message:', error.message || 'Unknown error');
+        console.log('[FCM TOKEN LOGS] Error response status:', error.response?.status || 'N/A');
+        console.log('[FCM TOKEN LOGS] Error response data:', JSON.stringify(error.response?.data || {}).substring(0, 200));
+        console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+        console.log('[FCM TOKEN LOGS] ========================================');
         throw error;
       }
     },
     onSuccess: () => {
+      console.log('[FCM TOKEN LOGS] Invalidating user profile query cache...');
       // Optionally invalidate user profile query if it exists
       queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
     },
@@ -63,95 +66,81 @@ export const useInitializeAndRegisterFCM = () => {
   const registerTokenMutation = useRegisterFCMToken();
 
   const initializeAndRegister = async () => {
+    console.log('[FCM TOKEN LOGS] ========================================');
+    console.log('[FCM TOKEN LOGS] === INITIALIZE AND REGISTER FCM TOKEN ===');
+    const startTime = Date.now();
+    
     try {
-      // Get current user info for logging
-      const user = useAuthStore.getState().user;
-      
-      console.log('[FCM] ========================================');
-      console.log('[FCM] Starting FCM token initialization and registration...');
-      console.log('[FCM] User Role:', user?.role);
-      console.log('[FCM] User Email:', user?.email);
-      console.log('[FCM] User ID:', user?._id);
-      
       // First, try to get stored token
+      console.log('[FCM TOKEN LOGS] Step 1: Checking for stored token...');
       let token = await getStoredFCMToken();
-      console.log('[FCM] Stored token found:', token ? 'Yes' : 'No');
 
       // If no stored token, initialize notifications and get new token
       if (!token) {
-        console.log('[FCM] No stored token, initializing notifications...');
+        console.log('[FCM TOKEN LOGS] Step 2: No stored token found, generating new token...');
         token = await initializeNotifications();
-        console.log('[FCM] New token obtained:', token ? 'Yes' : 'No');
       } else {
-        console.log('[FCM] Using stored token');
+        console.log('[FCM TOKEN LOGS] Step 2: Using stored token');
       }
 
       // If we have a token, register it with backend
       if (token) {
-        console.log('[FCM] ✅ Token obtained, preparing to register with backend...');
-        console.log('[FCM] Token length:', token.length);
-        console.log('[FCM] Token (first 30 chars):', token.substring(0, 30) + '...');
+        console.log('[FCM TOKEN LOGS] Step 3: Token available, checking auth state...');
         
         // Check if auth token is available before making API call
         let authToken = useAuthStore.getState().token;
-        console.log('[FCM] Initial auth token check:', authToken ? 'Available' : 'Not available');
+        console.log('[FCM TOKEN LOGS] Initial auth token check:', authToken ? 'Found' : 'Not found');
         
         if (!authToken) {
-          console.log('[FCM] ⚠️ Auth token not available, waiting 500ms...');
+          console.log('[FCM TOKEN LOGS] Auth token not found, waiting 500ms and checking again...');
           // Wait a bit and check again (auth might still be setting up)
           await new Promise(resolve => setTimeout(resolve, 500));
           authToken = useAuthStore.getState().token;
-          console.log('[FCM] Auth token after wait:', authToken ? 'Available' : 'Still not available');
+          console.log('[FCM TOKEN LOGS] Second auth token check:', authToken ? 'Found' : 'Not found');
           
           if (!authToken) {
-            console.log('[FCM] ❌ Auth token still not available after wait');
-            console.log('[FCM] ⚠️ Will retry token registration later when auth is available');
-            console.log('[FCM] Token stored locally, can be registered on next app start');
-            console.log('[FCM] ========================================');
+            const duration = Date.now() - startTime;
+            console.log('[FCM TOKEN LOGS] ⚠️ Auth token not available, returning token for later registration');
+            console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+            console.log('[FCM TOKEN LOGS] ========================================');
             return token; // Return token anyway, it can be registered later
           }
         }
         
-        console.log('[FCM] ✅ Auth token available, proceeding with backend registration...');
-        console.log('[FCM] Auth token (first 20 chars):', authToken.substring(0, 20) + '...');
-        
         // Add additional delay to ensure auth state is fully set
+        console.log('[FCM TOKEN LOGS] Waiting 200ms to ensure auth state is fully set...');
         await new Promise(resolve => setTimeout(resolve, 200));
         
+        console.log('[FCM TOKEN LOGS] Step 4: Registering token with backend...');
         try {
-          console.log('[FCM] Calling backend API to register token...');
-          const result = await registerTokenMutation.mutateAsync(token);
-          console.log('[FCM] ✅ Token registered successfully with backend');
-          console.log('[FCM] Backend response:', JSON.stringify(result, null, 2));
-          console.log('[FCM] ========================================');
+          await registerTokenMutation.mutateAsync(token);
+          const duration = Date.now() - startTime;
+          console.log('[FCM TOKEN LOGS] ✅ Token initialized and registered successfully');
+          console.log('[FCM TOKEN LOGS] Total duration:', duration, 'ms');
+          console.log('[FCM TOKEN LOGS] ========================================');
           return token;
         } catch (error) {
-          console.log('[FCM] ❌ Failed to register token with backend');
-          console.log('[FCM] Error message:', error.message);
-          console.log('[FCM] Error response:', error.response?.data);
-          console.log('[FCM] Error status:', error.response?.status);
-          console.log('[FCM] Error code:', error.code);
-          console.log('[FCM] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-          console.log('[FCM] ⚠️ Token is stored locally but not in database');
-          console.log('[FCM] Token will be retried on next app start or when manually triggered');
-          console.log('[FCM] ========================================');
+          const duration = Date.now() - startTime;
+          console.log('[FCM TOKEN LOGS] ⚠️ Token registration failed, but token is available for retry');
+          console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+          console.log('[FCM TOKEN LOGS] ========================================');
           // Don't return null here - still return token so it can be retried
           return token;
         }
-      } else {
-        console.log('[FCM] ❌ No token available to register');
-        console.log('[FCM] Possible reasons:');
-        console.log('  1. Notification permissions denied');
-        console.log('  2. Project ID not configured');
-        console.log('  3. Expo notifications module error');
-        console.log('[FCM] ========================================');
       }
 
+      const duration = Date.now() - startTime;
+      console.log('[FCM TOKEN LOGS] ❌ No token available after initialization');
+      console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+      console.log('[FCM TOKEN LOGS] ========================================');
       return null;
     } catch (error) {
-      console.log('[FCM] ❌ Error during FCM token registration:', error.message);
-      console.log('[FCM] Error details:', error);
-      console.log('[FCM] ========================================');
+      const duration = Date.now() - startTime;
+      console.log('[FCM TOKEN LOGS] ❌ Exception during initialize and register:');
+      console.log('[FCM TOKEN LOGS] Error message:', error.message);
+      console.log('[FCM TOKEN LOGS] Error stack:', error.stack);
+      console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+      console.log('[FCM TOKEN LOGS] ========================================');
       return null;
     }
   };
@@ -173,38 +162,45 @@ export const useRemoveFCMToken = () => {
 
   return useMutation({
     mutationFn: async () => {
-      const user = useAuthStore.getState().user;
-      
-      console.log('[FCM REMOVE] Removing FCM token from backend...');
-      console.log('[FCM REMOVE] User:', user?.email);
-      console.log('[FCM REMOVE] User Role:', user?.role);
+      console.log('[FCM TOKEN LOGS] ========================================');
+      console.log('[FCM TOKEN LOGS] Removing FCM token from backend...');
+      const startTime = Date.now();
       
       try {
+        console.log('[FCM TOKEN LOGS] Sending PUT request to /api/profile/fcm-token with null token...');
         const response = await api.put('/api/profile/fcm-token', {
           fcmToken: null,
         });
-
-        console.log('[FCM REMOVE] ✅ FCM token removed from backend');
-        console.log('[FCM REMOVE] Response:', response.data);
+        
+        const duration = Date.now() - startTime;
+        console.log('[FCM TOKEN LOGS] ✅ Token removal from backend successful');
+        console.log('[FCM TOKEN LOGS] Response status:', response?.status || 'N/A');
+        console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+        console.log('[FCM TOKEN LOGS] ========================================');
         
         return response.data;
       } catch (error) {
-        console.log('[FCM REMOVE] ❌ Error removing FCM token from backend');
-        console.log('[FCM REMOVE] Error:', error.message);
-        console.log('[FCM REMOVE] Error response:', error.response?.data);
+        const duration = Date.now() - startTime;
+        console.log('[FCM TOKEN LOGS] ❌ Token removal from backend failed:');
+        console.log('[FCM TOKEN LOGS] Error message:', error.message || 'Unknown error');
+        console.log('[FCM TOKEN LOGS] Error response status:', error.response?.status || 'N/A');
+        console.log('[FCM TOKEN LOGS] Error response data:', JSON.stringify(error.response?.data || {}).substring(0, 200));
+        console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+        console.log('[FCM TOKEN LOGS] ========================================');
         throw error;
       }
     },
     onSuccess: async () => {
+      console.log('[FCM TOKEN LOGS] Removing token from local storage...');
       // Remove token from local storage
-      console.log('[FCM REMOVE] Removing FCM token from local storage...');
       try {
         await removeFCMToken();
-        console.log('[FCM REMOVE] ✅ FCM token removed from local storage');
+        console.log('[FCM TOKEN LOGS] ✅ Token removed from local storage');
       } catch (error) {
-        console.log('[FCM REMOVE] ⚠️ Error removing token from local storage:', error.message);
+        console.log('[FCM TOKEN LOGS] ❌ Error removing token from local storage:', error.message);
       }
       
+      console.log('[FCM TOKEN LOGS] Invalidating user profile query cache...');
       // Optionally invalidate user profile query if it exists
       queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
     },

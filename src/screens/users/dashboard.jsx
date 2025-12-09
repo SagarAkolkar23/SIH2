@@ -60,7 +60,8 @@ export default function UserDashboard() {
   const { 
     data: dashboardResponse, 
     isLoading: dashboardLoading,
-    isError: dashboardError 
+    isError: dashboardError,
+    error: dashboardErrorDetails
   } = useUserDashboardQuery();
 
   // Hardcoded fallback data
@@ -84,27 +85,16 @@ export default function UserDashboard() {
     // If loading or error, use fallback
     // Backend returns: { success: true, data: dashboard }
     // useCustomQuery returns res.data, so dashboardResponse = { success: true, data: dashboard }
+    // Use fallback data if there's a network error to prevent app crash
     if (dashboardLoading || dashboardError || !dashboardResponse?.data) {
-      if (dashboardLoading) {
-        console.log('[USER DASHBOARD] ⏳ Loading dashboard data, using fallback');
-      } else if (dashboardError) {
-        console.log('[USER DASHBOARD] ❌ Error loading dashboard data, using fallback');
-      } else if (!dashboardResponse?.data) {
-        console.log('[USER DASHBOARD] ⚠️ No dashboard data in response, using fallback');
+      // Log network errors but don't crash - gracefully fall back to hardcoded data
+      if (dashboardErrorDetails?.isNetworkError) {
+        // Network error - silently use fallback data
       }
       return fallbackData;
     }
 
     const backendData = dashboardResponse.data;
-    console.log('[USER DASHBOARD] 📊 Processing live dashboard data');
-    console.log('[USER DASHBOARD] Backend data keys:', Object.keys(backendData));
-    console.log('[USER DASHBOARD] Voltage:', backendData.current_voltage);
-    console.log('[USER DASHBOARD] Current:', backendData.current_current);
-    console.log('[USER DASHBOARD] Power:', backendData.current_power || backendData.consumption);
-    console.log('[USER DASHBOARD] Battery:', backendData.battery_percentage);
-    console.log('[USER DASHBOARD] Temperature:', backendData.temperature);
-    console.log('[USER DASHBOARD] Inverter Status:', backendData.inverter_status);
-    console.log('[USER DASHBOARD] Last Updated:', backendData.lastUpdated);
     
     // Calculate power in kW from backend data (power is in W)
     const powerW = backendData.current_power || backendData.consumption || 0;

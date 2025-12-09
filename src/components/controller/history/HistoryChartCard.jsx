@@ -77,10 +77,7 @@ export default function HistoryChartCard({
         <View>
           <LineChart
             data={{
-              labels: data.labels.map((l) => {
-                const date = new Date(l);
-                return `${date.getMonth() + 1}/${date.getDate()}`;
-              }),
+              labels: data.labels.length > 0 ? data.labels : [],
               datasets: [{ data: data.data }],
             }}
             width={screenWidth - 64}

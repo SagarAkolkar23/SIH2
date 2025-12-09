@@ -19,12 +19,7 @@ export const useLoginApi = () => {
       const token = data?.data?.token;
       const user = data?.data?.user;
       
-      console.log('[LOGIN] Login successful for user:', user?.email);
-      console.log('[LOGIN] User ID:', user?._id);
-      console.log('[LOGIN] User role:', user?.role);
-      
       if (token && user) {
-        console.log('[LOGIN] Storing auth data in Zustand store...');
         await setAuthData({
           token: token,
           user: user,
@@ -33,15 +28,8 @@ export const useLoginApi = () => {
         // Verify auth state is set
         const verifyToken = useAuthStore.getState().token;
         const verifyUser = useAuthStore.getState().user;
-        console.log('[LOGIN] Auth state verification:');
-        console.log(".............",verifyToken);
-        console.log('  - Token set:', verifyToken ? 'Yes' : 'No');
-        console.log('  - User set:', verifyUser ? 'Yes' : 'No');
-        console.log('  - User email:', verifyUser?.email || 'N/A');
-        console.log('  - User role:', verifyUser?.role || 'N/A');
 
         if (!verifyToken || !verifyUser) {
-          console.log('[LOGIN] ⚠️ Auth state not fully set, retrying...');
           // Retry setting auth data
           await setAuthData({
             token: token,
@@ -49,29 +37,21 @@ export const useLoginApi = () => {
           });
           await new Promise(resolve => setTimeout(resolve, 200));
         }
-
-        console.log('[LOGIN] Starting FCM token registration...');
         
         // Register FCM token after successful login
         // This is non-blocking and will fail silently if permissions are denied
+        console.log('[FCM TOKEN LOGS] ========================================');
+        console.log('[FCM TOKEN LOGS] Login successful, initializing FCM token registration...');
+        console.log('[FCM TOKEN LOGS] User:', user?.email || 'N/A');
+        console.log('[FCM TOKEN LOGS] User Role:', user?.role || 'N/A');
         try {
-          const fcmToken = await initializeAndRegister();
-          if (fcmToken) {
-            console.log('[LOGIN] ✅ FCM token registration completed successfully');
-            console.log('[LOGIN] FCM Token (first 30 chars):', fcmToken.substring(0, 30) + '...');
-            console.log('[LOGIN] FCM Token length:', fcmToken.length);
-          } else {
-            console.log('[LOGIN] ⚠️ FCM token registration failed or permissions denied');
-            console.log('[LOGIN] Check console logs above for detailed error information');
-          }
+          await initializeAndRegister();
+          console.log('[FCM TOKEN LOGS] ✅ FCM token registration completed after login');
         } catch (error) {
-          console.log('[LOGIN] ❌ Error during FCM token registration:', error.message);
-          console.log('[LOGIN] Error stack:', error.stack);
+          console.log('[FCM TOKEN LOGS] ❌ Error during FCM token registration after login:', error.message);
+          console.log('[FCM TOKEN LOGS] Error stack:', error.stack);
         }
-      } else {
-        console.log('[LOGIN] ❌ Missing token or user data');
-        console.log('[LOGIN] Token present:', !!token);
-        console.log('[LOGIN] User present:', !!user);
+        console.log('[FCM TOKEN LOGS] ========================================');
       }
     },
   });
@@ -85,32 +65,27 @@ export const useLogoutApi = () => {
   // JWT tokens are stateless, so we just clear local storage
   // But we should remove FCM token from backend before clearing auth
   const performLogout = async () => {
-    const user = useAuthStore.getState().user;
+    console.log('[FCM TOKEN LOGS] ========================================');
+    console.log('[FCM TOKEN LOGS] Logout initiated, removing FCM token...');
     
-    console.log('[LOGOUT] ========================================');
-    console.log('[LOGOUT] Starting logout process...');
-    console.log('[LOGOUT] User:', user?.email);
-    console.log('[LOGOUT] User Role:', user?.role);
-    console.log('[LOGOUT] User ID:', user?._id);
-
     // Step 1: Remove FCM token from backend
-    console.log('[LOGOUT] Step 1: Removing FCM token from backend...');
     try {
+      console.log('[FCM TOKEN LOGS] Step 1: Removing FCM token from backend...');
       await removeTokenMutation.mutateAsync();
-      console.log('[LOGOUT] ✅ FCM token removed from backend');
+      console.log('[FCM TOKEN LOGS] ✅ FCM token removed from backend');
     } catch (error) {
-      console.log('[LOGOUT] ⚠️ Failed to remove FCM token from backend (non-blocking)');
-      console.log('[LOGOUT] Error:', error.message);
+      console.log('[FCM TOKEN LOGS] ⚠️ Failed to remove FCM token from backend:', error.message);
+      console.log('[FCM TOKEN LOGS] Continuing with logout...');
       // Continue with logout even if token removal fails
     }
 
     // Step 2: Clear auth data (removes token and user from AsyncStorage and state)
-    console.log('[LOGOUT] Step 2: Clearing auth data...');
+    console.log('[FCM TOKEN LOGS] Step 2: Clearing auth data...');
     try {
       await clearAuth();
-      console.log('[LOGOUT] ✅ Auth data cleared from AsyncStorage and state');
+      console.log('[FCM TOKEN LOGS] ✅ Auth data cleared successfully');
     } catch (error) {
-      console.log('[LOGOUT] ❌ Error clearing auth data:', error.message);
+      console.log('[FCM TOKEN LOGS] ⚠️ Error clearing auth data, attempting manual clear...');
       // Still try to clear manually
       try {
         const AsyncStorage = await import('@react-native-async-storage/async-storage');
@@ -118,14 +93,13 @@ export const useLogoutApi = () => {
         await AsyncStorage.default.removeItem("user");
         await AsyncStorage.default.removeItem("@fcm_token");
         useAuthStore.setState({ token: null, user: null });
-        console.log('[LOGOUT] ✅ Auth data cleared manually');
+        console.log('[FCM TOKEN LOGS] ✅ Auth data cleared manually');
       } catch (manualError) {
-        console.log('[LOGOUT] ❌ Failed to clear auth data manually:', manualError.message);
+        console.log('[FCM TOKEN LOGS] ❌ Failed to clear auth data manually:', manualError.message);
       }
     }
-
-    console.log('[LOGOUT] ✅ Logout process completed');
-    console.log('[LOGOUT] ========================================');
+    console.log('[FCM TOKEN LOGS] Logout completed');
+    console.log('[FCM TOKEN LOGS] ========================================');
   };
 
   return {

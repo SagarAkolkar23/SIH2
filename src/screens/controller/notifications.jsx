@@ -61,14 +61,16 @@ export default function NotificationsScreen() {
     if (sendNotificationMutation.isSuccess) {
       refetchHistory();
     }
-  }, [sendNotificationMutation.isSuccess]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sendNotificationMutation.isSuccess]); // Only depend on isSuccess, not refetchHistory
 
   // Refetch stats when microgrid changes
   useEffect(() => {
     if (selectedMicrogridId) {
       refetchStats();
     }
-  }, [selectedMicrogridId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMicrogridId]); // Only depend on selectedMicrogridId, not refetchStats
 
   const [formData, setFormData] = useState({
     date: new Date(),
@@ -202,7 +204,6 @@ export default function NotificationsScreen() {
             "Error",
             error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to send notification"
           );
-          console.log(error);
         },
       }
     );

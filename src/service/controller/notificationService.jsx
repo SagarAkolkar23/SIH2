@@ -82,7 +82,6 @@ export const useSendNotificationApi = () => {
   
   return useMutation({
     mutationFn: async (data) => {
-      console.log(data);
       // Backend expects: gridId, title, body, notificationType, priority, data
       const payload = {
         gridId: data.gridId || data.microgridId, // Support both field names
