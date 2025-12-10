@@ -24,6 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -43,7 +44,14 @@
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to provide accurate weather information."
         }
       ],
-      "expo-build-properties"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "googleServicesFile": "./google-services.json"
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

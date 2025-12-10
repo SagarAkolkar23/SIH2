@@ -24,6 +24,16 @@ export const useRegisterFCMToken = () => {
         throw new Error('FCM token is required');
       }
 
+      // Check if auth token exists
+      const authToken = useAuthStore.getState().token;
+      console.log('[FCM TOKEN LOGS] Auth token check:', authToken ? 'Present' : 'Missing');
+      
+      if (!authToken) {
+        console.log('[FCM TOKEN LOGS] ❌ Registration failed: No auth token available');
+        console.log('[FCM TOKEN LOGS] ========================================');
+        throw new Error('Authentication required - no auth token');
+      }
+
       try {
         console.log('[FCM TOKEN LOGS] Sending PUT request to /api/profile/fcm-token...');
         
@@ -52,7 +62,6 @@ export const useRegisterFCMToken = () => {
     },
     onSuccess: () => {
       console.log('[FCM TOKEN LOGS] Invalidating user profile query cache...');
-      // Optionally invalidate user profile query if it exists
       queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
     },
   });
@@ -71,77 +80,83 @@ export const useInitializeAndRegisterFCM = () => {
     const startTime = Date.now();
     
     try {
-      // First, try to get stored token
-      console.log('[FCM TOKEN LOGS] Step 1: Checking for stored token...');
+      // Step 1: Check auth state FIRST
+      console.log('[FCM TOKEN LOGS] Step 1: Verifying auth state...');
+      let authToken = useAuthStore.getState().token;
+      const authUser = useAuthStore.getState().user;
+      
+      console.log('[FCM TOKEN LOGS] Auth check results:');
+      console.log('[FCM TOKEN LOGS]   - Token:', authToken ? 'Present' : 'Missing');
+      console.log('[FCM TOKEN LOGS]   - User:', authUser?.email || 'Missing');
+      
+      if (!authToken) {
+        const duration = Date.now() - startTime;
+        console.log('[FCM TOKEN LOGS] ❌ Auth token not available');
+        console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+        console.log('[FCM TOKEN LOGS] ========================================');
+        throw new Error('Authentication required - please log in first');
+      }
+
+      // Step 2: Try to get stored token first (avoid regenerating unnecessarily)
+      console.log('[FCM TOKEN LOGS] Step 2: Checking for stored FCM token...');
       let token = await getStoredFCMToken();
 
-      // If no stored token, initialize notifications and get new token
+      // Step 3: If no stored token, initialize and generate new token
       if (!token) {
-        console.log('[FCM TOKEN LOGS] Step 2: No stored token found, generating new token...');
+        console.log('[FCM TOKEN LOGS] Step 3: No stored token, generating new FCM token...');
         token = await initializeNotifications();
-      } else {
-        console.log('[FCM TOKEN LOGS] Step 2: Using stored token');
-      }
-
-      // If we have a token, register it with backend
-      if (token) {
-        console.log('[FCM TOKEN LOGS] Step 3: Token available, checking auth state...');
         
-        // Check if auth token is available before making API call
-        let authToken = useAuthStore.getState().token;
-        console.log('[FCM TOKEN LOGS] Initial auth token check:', authToken ? 'Found' : 'Not found');
-        
-        if (!authToken) {
-          console.log('[FCM TOKEN LOGS] Auth token not found, waiting 500ms and checking again...');
-          // Wait a bit and check again (auth might still be setting up)
-          await new Promise(resolve => setTimeout(resolve, 500));
-          authToken = useAuthStore.getState().token;
-          console.log('[FCM TOKEN LOGS] Second auth token check:', authToken ? 'Found' : 'Not found');
-          
-          if (!authToken) {
-            const duration = Date.now() - startTime;
-            console.log('[FCM TOKEN LOGS] ⚠️ Auth token not available, returning token for later registration');
-            console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
-            console.log('[FCM TOKEN LOGS] ========================================');
-            return token; // Return token anyway, it can be registered later
-          }
-        }
-        
-        // Add additional delay to ensure auth state is fully set
-        console.log('[FCM TOKEN LOGS] Waiting 200ms to ensure auth state is fully set...');
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        console.log('[FCM TOKEN LOGS] Step 4: Registering token with backend...');
-        try {
-          await registerTokenMutation.mutateAsync(token);
+        if (!token) {
           const duration = Date.now() - startTime;
-          console.log('[FCM TOKEN LOGS] ✅ Token initialized and registered successfully');
-          console.log('[FCM TOKEN LOGS] Total duration:', duration, 'ms');
-          console.log('[FCM TOKEN LOGS] ========================================');
-          return token;
-        } catch (error) {
-          const duration = Date.now() - startTime;
-          console.log('[FCM TOKEN LOGS] ⚠️ Token registration failed, but token is available for retry');
+          console.log('[FCM TOKEN LOGS] ❌ Failed to generate FCM token');
           console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
           console.log('[FCM TOKEN LOGS] ========================================');
-          // Don't return null here - still return token so it can be retried
-          return token;
+          throw new Error('Failed to generate FCM token');
         }
+        
+        console.log('[FCM TOKEN LOGS] ✅ New FCM token generated');
+        console.log('[FCM TOKEN LOGS] Token length:', token.length);
+        console.log('[FCM TOKEN LOGS] Token preview:', token.substring(0, 30) + '...');
+      } else {
+        console.log('[FCM TOKEN LOGS] Step 3: Using stored FCM token');
+        console.log('[FCM TOKEN LOGS] Token length:', token.length);
+        console.log('[FCM TOKEN LOGS] Token preview:', token.substring(0, 30) + '...');
       }
 
+      // Step 4: Verify auth token again before API call
+      authToken = useAuthStore.getState().token;
+      if (!authToken) {
+        const duration = Date.now() - startTime;
+        console.log('[FCM TOKEN LOGS] ❌ Auth token lost before registration');
+        console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+        console.log('[FCM TOKEN LOGS] ========================================');
+        throw new Error('Auth token not available for registration');
+      }
+      
+      console.log('[FCM TOKEN LOGS] Step 4: Registering token with backend...');
+      console.log('[FCM TOKEN LOGS] Auth token verified before registration');
+      
+      // Register token with backend
+      await registerTokenMutation.mutateAsync(token);
+      
       const duration = Date.now() - startTime;
-      console.log('[FCM TOKEN LOGS] ❌ No token available after initialization');
-      console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
+      console.log('[FCM TOKEN LOGS] ✅ Token initialized and registered successfully');
+      console.log('[FCM TOKEN LOGS] Total duration:', duration, 'ms');
       console.log('[FCM TOKEN LOGS] ========================================');
-      return null;
+      
+      return token;
+      
     } catch (error) {
       const duration = Date.now() - startTime;
       console.log('[FCM TOKEN LOGS] ❌ Exception during initialize and register:');
+      console.log('[FCM TOKEN LOGS] Error type:', error.constructor.name);
       console.log('[FCM TOKEN LOGS] Error message:', error.message);
       console.log('[FCM TOKEN LOGS] Error stack:', error.stack);
       console.log('[FCM TOKEN LOGS] Duration:', duration, 'ms');
       console.log('[FCM TOKEN LOGS] ========================================');
-      return null;
+      
+      // Re-throw error so caller knows it failed
+      throw error;
     }
   };
 
@@ -192,7 +207,6 @@ export const useRemoveFCMToken = () => {
     },
     onSuccess: async () => {
       console.log('[FCM TOKEN LOGS] Removing token from local storage...');
-      // Remove token from local storage
       try {
         await removeFCMToken();
         console.log('[FCM TOKEN LOGS] ✅ Token removed from local storage');
@@ -201,7 +215,6 @@ export const useRemoveFCMToken = () => {
       }
       
       console.log('[FCM TOKEN LOGS] Invalidating user profile query cache...');
-      // Optionally invalidate user profile query if it exists
       queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
     },
   });

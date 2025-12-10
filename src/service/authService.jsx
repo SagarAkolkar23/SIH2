@@ -10,7 +10,7 @@ export const useLoginApi = () => {
     mutationFn: ({ email, password }) => {
       return {
         method: "POST",
-        url: "/api/auth/login", // Fixed: Added leading slash
+        url: "/api/auth/login",
         data: { email, password },
       };
     },
@@ -20,38 +20,70 @@ export const useLoginApi = () => {
       const user = data?.data?.user;
       
       if (token && user) {
+        console.log('[LOGIN] Setting auth data...');
+        
+        // Set auth data FIRST
         await setAuthData({
           token: token,
           user: user,
         });
 
-        // Verify auth state is set
-        const verifyToken = useAuthStore.getState().token;
-        const verifyUser = useAuthStore.getState().user;
+        // Wait for AsyncStorage to complete and state to update
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-        if (!verifyToken || !verifyUser) {
+        // Verify auth state is set multiple times
+        let retries = 0;
+        const maxRetries = 5;
+        
+        while (retries < maxRetries) {
+          const verifyToken = useAuthStore.getState().token;
+          const verifyUser = useAuthStore.getState().user;
+
+          if (verifyToken && verifyUser) {
+            console.log('[LOGIN] ✅ Auth state verified successfully');
+            break;
+          }
+
+          console.log(`[LOGIN] ⚠️ Auth state not set, retry ${retries + 1}/${maxRetries}`);
+          
           // Retry setting auth data
           await setAuthData({
             token: token,
             user: user,
           });
-          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          await new Promise(resolve => setTimeout(resolve, 300));
+          retries++;
+        }
+
+        if (retries === maxRetries) {
+          console.log('[LOGIN] ❌ Failed to verify auth state after maximum retries');
         }
         
-        // Register FCM token after successful login
-        // This is non-blocking and will fail silently if permissions are denied
+        // NOW register FCM token with guaranteed auth state
         console.log('[FCM TOKEN LOGS] ========================================');
-        console.log('[FCM TOKEN LOGS] Login successful, initializing FCM token registration...');
+        console.log('[FCM TOKEN LOGS] Login successful, starting FCM registration...');
         console.log('[FCM TOKEN LOGS] User:', user?.email || 'N/A');
         console.log('[FCM TOKEN LOGS] User Role:', user?.role || 'N/A');
+        
         try {
-          await initializeAndRegister();
-          console.log('[FCM TOKEN LOGS] ✅ FCM token registration completed after login');
+          const fcmToken = await initializeAndRegister();
+          
+          if (fcmToken) {
+            console.log('[FCM TOKEN LOGS] ✅ FCM token registered successfully after login');
+            console.log('[FCM TOKEN LOGS] Token preview:', fcmToken.substring(0, 30) + '...');
+          } else {
+            console.log('[FCM TOKEN LOGS] ⚠️ FCM token registration returned null');
+          }
         } catch (error) {
-          console.log('[FCM TOKEN LOGS] ❌ Error during FCM token registration after login:', error.message);
-          console.log('[FCM TOKEN LOGS] Error stack:', error.stack);
+          console.log('[FCM TOKEN LOGS] ❌ Error during FCM token registration after login');
+          console.log('[FCM TOKEN LOGS] Error:', error.message);
+          console.log('[FCM TOKEN LOGS] Stack:', error.stack);
         }
+        
         console.log('[FCM TOKEN LOGS] ========================================');
+      } else {
+        console.log('[LOGIN] ❌ Missing token or user in response');
       }
     },
   });
@@ -61,9 +93,6 @@ export const useLogoutApi = () => {
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const removeTokenMutation = useRemoveFCMToken();
 
-  // Logout is handled client-side (backend has no logout endpoint)
-  // JWT tokens are stateless, so we just clear local storage
-  // But we should remove FCM token from backend before clearing auth
   const performLogout = async () => {
     console.log('[FCM TOKEN LOGS] ========================================');
     console.log('[FCM TOKEN LOGS] Logout initiated, removing FCM token...');
@@ -76,17 +105,15 @@ export const useLogoutApi = () => {
     } catch (error) {
       console.log('[FCM TOKEN LOGS] ⚠️ Failed to remove FCM token from backend:', error.message);
       console.log('[FCM TOKEN LOGS] Continuing with logout...');
-      // Continue with logout even if token removal fails
     }
 
-    // Step 2: Clear auth data (removes token and user from AsyncStorage and state)
+    // Step 2: Clear auth data
     console.log('[FCM TOKEN LOGS] Step 2: Clearing auth data...');
     try {
       await clearAuth();
       console.log('[FCM TOKEN LOGS] ✅ Auth data cleared successfully');
     } catch (error) {
       console.log('[FCM TOKEN LOGS] ⚠️ Error clearing auth data, attempting manual clear...');
-      // Still try to clear manually
       try {
         const AsyncStorage = await import('@react-native-async-storage/async-storage');
         await AsyncStorage.default.removeItem("token");
