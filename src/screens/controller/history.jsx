@@ -20,23 +20,21 @@ let Sharing = null;
 try {
   // Try legacy API first (for writeAsStringAsync)
   FileSystem = require('expo-file-system/legacy');
-  console.log('[HISTORY] FileSystem legacy module loaded');
 } catch (error) {
-  console.warn('[HISTORY] Legacy API not available:', error.message);
+  // Legacy API not available
 }
 
 try {
   // Try new API as well (for File/Directory classes)
   FileSystemNew = require('expo-file-system/next');
-  console.log('[HISTORY] FileSystem new API module loaded');
 } catch (error) {
-  console.warn('[HISTORY] New API not available:', error.message);
+  // New API not available
 }
 
 try {
   Sharing = require('expo-sharing');
 } catch (error) {
-  console.warn('[HISTORY] Sharing module not available:', error.message);
+  // Sharing module not available
 }
 import {
   TrendingUp,
@@ -52,7 +50,8 @@ import ActionButtonsRow from "../../components/controller/history/ActionButtonsR
 import HistoryChartCard from "../../components/controller/history/HistoryChartCard";
 import DownloadButton from "../../components/controller/history/DownloadButton";
 import { useThemeStore } from "../../store/themeStore";
-import { useGridHistoricalData, downloadGridHistoricalData } from "../../service/controller/historyService";
+import { useGridHistoricalData, useGenerationHistoryCharts, downloadGridHistoricalData, downloadGenerationHistoryCharts } from "../../service/controller/historyService";
+import { useAuthStore } from "../../store/authStore";
 
 // Generate mock historical data
 const generateHistoricalData = () => {
@@ -90,10 +89,16 @@ const generateHistoricalData = () => {
 
 export default function History() {
   const { colors } = useThemeStore();
+  const { user } = useAuthStore();
   const [dateFilter, setDateFilter] = useState("last7days");
   const [areaFilter, setAreaFilter] = useState("all");
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // For Generation model data - can be set based on selected device/location
+  const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  // Use Generation data if deviceId/location is available, otherwise use grid-based data
+  const useGenerationData = !!(selectedDeviceId || selectedLocation);
 
   // Calculate date range from filter
   const getDateRange = useMemo(() => {
@@ -144,13 +149,32 @@ export default function History() {
     };
   }, [dateFilter]);
 
-  // Fetch historical data from backend
+  // Fetch Generation history data (if deviceId/location is set)
+  const { 
+    data: generationHistoryResponse, 
+    isLoading: isLoadingGenerationHistory, 
+    error: generationHistoryError 
+  } = useGenerationHistoryCharts({
+    deviceId: selectedDeviceId,
+    location: selectedLocation,
+    start: getDateRange.start,
+    end: getDateRange.end,
+    granularity: getDateRange.granularity,
+    enabled: useGenerationData
+  });
+
+  // Fetch grid-based historical data (fallback or when not using Generation data)
   const { data: historyResponse, isLoading: isLoadingHistory, error: historyError, refetch } = useGridHistoricalData({
     start: getDateRange.start,
     end: getDateRange.end,
     granularity: getDateRange.granularity,
-    enabled: true
+    enabled: !useGenerationData
   });
+
+  // Use Generation data if available, otherwise use grid-based data
+  const activeHistoryResponse = useGenerationData ? generationHistoryResponse : historyResponse;
+  const isLoadingActiveHistory = useGenerationData ? isLoadingGenerationHistory : isLoadingHistory;
+  const activeHistoryError = useGenerationData ? generationHistoryError : historyError;
 
   // Fallback mock data
   const historicalData = useMemo(() => generateHistoricalData(), []);
@@ -259,10 +283,15 @@ export default function History() {
   };
 
   // Get chart data from backend or fallback to mock
+  // This will automatically update when date filter changes because:
+  // 1. dateFilter changes → getDateRange recalculates
+  // 2. getDateRange changes → query key changes (includes start/end/granularity)
+  // 3. Query key changes → React Query refetches with new date range
+  // 4. activeHistoryResponse updates → getChartData recalculates
   const getChartData = useMemo(() => {
-    // Use backend data if available
-    if (historyResponse?.data?.aggregatedData) {
-      const backendData = historyResponse.data.aggregatedData;
+    // Use backend data if available (from either Generation or Grid-based endpoint)
+    if (activeHistoryResponse?.data?.aggregatedData) {
+      const backendData = activeHistoryResponse.data.aggregatedData;
       return {
         voltage: backendData.voltage || { labels: [], data: [] },
         current: backendData.current || { labels: [], data: [] },
@@ -270,11 +299,11 @@ export default function History() {
         battery: backendData.battery || { labels: [], data: [] },
         solarInput: backendData.solarInput || { labels: [], data: [] },
         isUsingLiveData: true,
-        recordCount: historyResponse.data.count || 0
+        recordCount: activeHistoryResponse.data.count || 0
       };
     }
 
-    // Fallback to mock data
+    // Fallback to mock data (filtered by dateFilter)
     return {
       voltage: prepareMockChartData("voltage"),
       current: prepareMockChartData("current"),
@@ -284,7 +313,7 @@ export default function History() {
       isUsingLiveData: false,
       recordCount: filteredMockData.length
     };
-  }, [historyResponse, filteredMockData]);
+  }, [activeHistoryResponse, filteredMockData, dateFilter]); // Added dateFilter to dependencies for clarity
 
   const voltageData = getChartData.voltage;
   const currentData = getChartData.current;
@@ -310,12 +339,20 @@ export default function History() {
           text: "Download",
           onPress: async () => {
             try {
-              // Download the file using the service (handles auth automatically)
-              const arrayBuffer = await downloadGridHistoricalData({
-                start: getDateRange.start,
-                end: getDateRange.end,
-                granularity: getDateRange.granularity,
-              });
+              // Download the file using the appropriate service based on data source
+              const arrayBuffer = useGenerationData
+                ? await downloadGenerationHistoryCharts({
+                    deviceId: selectedDeviceId,
+                    location: selectedLocation,
+                    start: getDateRange.start,
+                    end: getDateRange.end,
+                    granularity: getDateRange.granularity,
+                  })
+                : await downloadGridHistoricalData({
+                    start: getDateRange.start,
+                    end: getDateRange.end,
+                    granularity: getDateRange.granularity,
+                  });
 
               // Generate filename
               const fromDate = getDateRange.start ? new Date(getDateRange.start).toISOString().split('T')[0] : 'start';
@@ -409,24 +446,21 @@ export default function History() {
                       
                       const file = new File(fileUri);
                       await file.write(base64, { encoding: EncodingType.Base64 });
-                      console.log('[HISTORY DOWNLOAD] File saved using new API to:', fileUri);
                       saved = true;
                     } catch (newApiError) {
-                      console.warn('[HISTORY DOWNLOAD] New API failed, trying legacy:', newApiError.message);
+                      // New API failed, trying legacy
                     }
                   }
                   
                   if (!saved && FileSystem) {
                     // Fallback to legacy API (expo-file-system/legacy)
                     fileUri = `${documentDir}${filename}`;
-                    console.log('[HISTORY DOWNLOAD] Saving file using legacy API to:', fileUri);
                     
                     // Use legacy API's writeAsStringAsync with Base64 encoding
                     await FileSystem.writeAsStringAsync(fileUri, base64, {
                       encoding: FileSystem.EncodingType.Base64,
                     });
                     
-                    console.log('[HISTORY DOWNLOAD] File saved successfully using legacy API');
                     saved = true;
                   }
                   
@@ -480,7 +514,6 @@ export default function History() {
                     );
                   }
                 } catch (saveError) {
-                  console.error("File save error:", saveError);
                   Alert.alert(
                     "Save Failed",
                     `Failed to save file to device storage.\n\n${saveError.message}`
@@ -488,7 +521,6 @@ export default function History() {
                 }
               }
             } catch (error) {
-              console.error("Download error:", error);
               Alert.alert(
                 "Download Failed",
                 error.response?.data?.message || error.message || "Failed to download the report. Please try again."

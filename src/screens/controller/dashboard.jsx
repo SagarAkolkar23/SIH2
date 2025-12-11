@@ -1,6 +1,6 @@
 // src/screens/Dashboard.js
-import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, SafeAreaView, Platform, ActivityIndicator } from "react-native";
+import React, { useState, useEffect, useMemo } from "react";
+import { View, Text, ScrollView, SafeAreaView, Platform, ActivityIndicator, TouchableOpacity, LayoutAnimation } from "react-native";
 import {
   Zap,
   Activity,
@@ -8,6 +8,9 @@ import {
   Thermometer,
   Power,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Check,
 } from "lucide-react-native";
 import IndustrialGauge from "../../components/controller/dashboard/industrialGauge";
 import IndustrialBattery from "../../components/controller/dashboard/IndustrialBattery";
@@ -20,6 +23,14 @@ import RegistrationModal from "../../components/controller/RegistrationModal";
 import { useLiveTelemetry } from "../../service/controller/telemetryService";
 import { useFocusEffect } from "@react-navigation/native";
 import WeatherWidget from "../../components/controller/dashboard/WeatherWidget";
+import { useControlCleanerMotor } from "../../service/controller/cleanerRobotService";
+
+// Enable LayoutAnimation for Android
+if (Platform.OS === "android") {
+  const { UIManager } = require("react-native");
+  UIManager.setLayoutAnimationEnabledExperimental &&
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function Dashboard() {
   const { colors } = useThemeStore();
@@ -27,6 +38,13 @@ export default function Dashboard() {
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [registrationModalVisible, setRegistrationModalVisible] = useState(false);
   const [isWeatherExpanded, setIsWeatherExpanded] = useState(false);
+  const [selectedPanelId, setSelectedPanelId] = useState("PANEL-TOTAL"); // Default to total panel
+  const [isPanelDropdownOpen, setIsPanelDropdownOpen] = useState(false);
+  const [motorStatus, setMotorStatus] = useState('OFF'); // Track motor status
+  const lastAutoActivationRef = React.useRef(null); // Track last auto-activation to prevent loops
+  
+  // Cleaner robot motor control mutation
+  const controlMotorMutation = useControlCleanerMotor();
   
   // Get gridId from user (controller's assigned grid)
   // gridId can be either a string (ObjectId) or an object (populated from backend)
@@ -50,21 +68,147 @@ export default function Dashboard() {
 
   // Extract telemetry data
   const telemetry = telemetryResponse?.data?.generation;
+  console.log("telemetry and my change ",telemetry);
+  
+  // Get all panels from telemetry data
+  const panels = telemetry?.panels || [];
+  
+  // Find Panel-1 and Panel-2
+  const panel1 = panels.find(panel => panel.panelId === "PANEL-1" || panel.panelId === "Panel-1");
+  const panel2 = panels.find(panel => panel.panelId === "PANEL-2" || panel.panelId === "Panel-2");
+  
+  // Calculate efficiency for Panel-1 and Panel-2 (capacity: 15V per panel)
+  const INDIVIDUAL_PANEL_CAPACITY = 15; // 15V per individual panel
+  
+  const calculatePanelEfficiency = (panel) => {
+    if (!panel || !panel.voltage || panel.voltage <= 0) return 100; // Default to 100% if no data
+    const efficiency = (panel.voltage / INDIVIDUAL_PANEL_CAPACITY) * 100;
+    return Math.min(efficiency, 100); // Cap at 100%
+  };
+  
+  const panel1Efficiency = panel1 ? calculatePanelEfficiency(panel1) : 100;
+  const panel2Efficiency = panel2 ? calculatePanelEfficiency(panel2) : 100;
+  
+  // Auto-activate motor if any panel efficiency < 50%
+  useEffect(() => {
+    const shouldActivate = (panel1Efficiency < 50 || panel2Efficiency < 50);
+    const lowEfficiencyKey = `${panel1Efficiency.toFixed(1)}-${panel2Efficiency.toFixed(1)}`;
+    
+    // Only activate if:
+    // 1. Efficiency is low
+    // 2. Motor is currently OFF
+    // 3. We haven't already activated for this exact efficiency state (prevent loops)
+    // 4. Not already processing a mutation
+    if (shouldActivate && 
+        motorStatus === 'OFF' && 
+        !controlMotorMutation.isPending &&
+        lastAutoActivationRef.current !== lowEfficiencyKey &&
+        (panel1 || panel2)) { // Only if we have panel data
+      
+      console.log(`[AUTO MOTOR] Activating motor due to low efficiency - Panel-1: ${panel1Efficiency.toFixed(1)}%, Panel-2: ${panel2Efficiency.toFixed(1)}%`);
+      lastAutoActivationRef.current = lowEfficiencyKey;
+      
+      controlMotorMutation.mutate(
+        {
+          robotId: 'CLEANER-01',
+          motorStatus: 'ON'
+        },
+        {
+          onSuccess: (result) => {
+            if (result?.success) {
+              setMotorStatus('ON');
+              console.log('[AUTO MOTOR] ✅ Motor activated successfully due to low panel efficiency');
+            }
+          },
+          onError: (error) => {
+            console.error('[AUTO MOTOR] ❌ Error auto-activating motor:', error);
+            // Reset ref on error so we can retry
+            lastAutoActivationRef.current = null;
+          }
+        }
+      );
+    }
+    
+    // Reset auto-activation tracking if efficiency recovers (both panels >= 50%)
+    if (!shouldActivate && lastAutoActivationRef.current !== null) {
+      lastAutoActivationRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel1Efficiency, panel2Efficiency, motorStatus, panel1?.voltage, panel2?.voltage, controlMotorMutation.isPending]);
+  
+  // Create panel options for dropdown (include all panels + TOTAL option)
+  const panelOptions = useMemo(() => {
+    const options = [];
+    
+    // Add individual panels (exclude PANEL-TOTAL from individual list)
+    panels.forEach(panel => {
+      if (panel.panelId && panel.panelId !== "PANEL-TOTAL") {
+        options.push({
+          label: panel.panelId,
+          value: panel.panelId,
+          panel: panel
+        });
+      }
+    });
+    
+    // Add TOTAL option at the end
+    const panelTotal = panels.find(panel => panel.panelId === "PANEL-TOTAL");
+    if (panelTotal || panels.length > 0) {
+      options.push({
+        label: "TOTAL",
+        value: "PANEL-TOTAL",
+        panel: panelTotal || null
+      });
+    }
+    
+    return options;
+  }, [panels]);
+  
+  // Reset to PANEL-TOTAL if selected panel is no longer available
+  useEffect(() => {
+    if (panelOptions.length > 0 && !panelOptions.find(opt => opt.value === selectedPanelId)) {
+      const totalOption = panelOptions.find(opt => opt.value === "PANEL-TOTAL");
+      if (totalOption) {
+        setSelectedPanelId("PANEL-TOTAL");
+      } else if (panelOptions.length > 0) {
+        setSelectedPanelId(panelOptions[0].value);
+      }
+    }
+  }, [panelOptions, selectedPanelId]);
+  
+  // Find selected panel
+  const selectedPanelOption = panelOptions.find(opt => opt.value === selectedPanelId);
+  const selectedPanel = selectedPanelOption?.panel;
+  const panelTotal = panels.find(panel => panel.panelId === "PANEL-TOTAL");
   
   // Map telemetry data to dashboard format with fallbacks
-  const voltage = telemetry?.incomingVoltage ?? 0;
+  // Use selected panel voltage/current if available, otherwise fall back to aggregate values
+  let voltage = 0;
+  let current = 0;
+  
+  if (selectedPanel) {
+    // Use values from selected panel
+    voltage = selectedPanel.voltage ?? 0;
+    current = selectedPanel.current ?? 0;
+  } else if (selectedPanelId === "PANEL-TOTAL" && panelTotal) {
+    // Use PANEL-TOTAL panel values
+    voltage = panelTotal.voltage ?? telemetry?.incomingVoltage ?? 0;
+    current = panelTotal.current ?? 0;
+  } else {
+    // Fallback to aggregate values
+    const aggregateVoltage = telemetry?.incomingVoltage ?? 0;
+    voltage = aggregateVoltage;
+    current = aggregateVoltage > 0 && telemetry?.generation 
+      ? (telemetry.generation * 1000) / aggregateVoltage 
+      : 0;
+  }
   const generation = telemetry?.generation ?? 0; // kW
   const consumption = telemetry?.consumption ?? 0; // kW
-  const battery = telemetry?.batteryPercentage ?? 0;
+  const battery = telemetry?.rawPayload?.batterySOH || 0;
   const temp = telemetry?.temperature ?? 0;
   const inverterStatus = telemetry?.inverterStatus ?? 'OFF';
   const coolingStatus = telemetry?.coolingStatus ?? false;
   const lastUpdated = telemetry?.timestamp ? new Date(telemetry.timestamp) : new Date();
-  
-  // Calculate current from voltage and generation (if voltage > 0)
-  // Current (A) = Power (W) / Voltage (V)
-  // Generation is in kW, so multiply by 1000 to get Watts
-  const current = voltage > 0 ? (generation * 1000) / voltage : 0;
   
   // Solar input is generation in kW converted to Watts
   const solarInput = generation * 1000; // Convert kW to W
@@ -88,9 +232,9 @@ export default function Dashboard() {
   // System status logic based on telemetry data
   const systemStatus = (() => {
     if (!telemetry) return "CONNECTING";
-    if (inverterStatus === 'FAULT') return "FAULT";
+    //if (inverterStatus === 'FAULT') return "FAULT";
     if (voltage < 6 || voltage > 18) return "FAULT";
-    if (temp >= 50) return "OVERHEAT";
+    if (temp >= 70) return "OVERHEAT";
     if (battery < 20) return "LOW BATTERY";
     return "OPERATIONAL";
   })();
@@ -130,6 +274,13 @@ export default function Dashboard() {
           paddingHorizontal: 16,
           paddingTop: 20,
           paddingBottom: 32,
+        }}
+        onScrollBeginDrag={() => {
+          // Close dropdown when user starts scrolling
+          if (isPanelDropdownOpen) {
+            LayoutAnimation.easeInEaseOut();
+            setIsPanelDropdownOpen(false);
+          }
         }}
       >
         {/* Weather Widget */}
@@ -302,18 +453,125 @@ export default function Dashboard() {
         </View>
 
         {/* Section Header */}
-        <Text
-          style={{
-            color: colors.textTertiary,
-            fontSize: 11,
-            fontWeight: "700",
-            letterSpacing: 1.5,
-            marginBottom: 12,
-            textTransform: "uppercase",
-          }}
-        >
-          Primary Meters
-        </Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, zIndex: 1000 }}>
+          <Text
+            style={{
+              color: colors.textTertiary,
+              fontSize: 11,
+              fontWeight: "700",
+              letterSpacing: 1.5,
+              textTransform: "uppercase",
+            }}
+          >
+            Primary Meters
+          </Text>
+          
+          {/* Panel Selection Dropdown */}
+          {!isLoading && !error && panelOptions.length > 0 && (
+            <View style={{ position: "relative", zIndex: 1000 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  LayoutAnimation.easeInEaseOut();
+                  setIsPanelDropdownOpen(!isPanelDropdownOpen);
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: colors.surface,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  minWidth: 120,
+                  zIndex: 1001,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: 12,
+                    fontWeight: "600",
+                    marginRight: 6,
+                  }}
+                >
+                  {panelOptions.find(opt => opt.value === selectedPanelId)?.label || "Select Panel"}
+                </Text>
+                {isPanelDropdownOpen ? (
+                  <ChevronUp size={16} color={colors.textTertiary} />
+                ) : (
+                  <ChevronDown size={16} color={colors.textTertiary} />
+                )}
+              </TouchableOpacity>
+              
+              {/* Dropdown Menu */}
+              {isPanelDropdownOpen && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: 36, // Position below button (button height ~32px + 4px margin)
+                    right: 0,
+                    backgroundColor: colors.surface,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    minWidth: 140,
+                    maxWidth: 180,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 3.84,
+                    elevation: 10,
+                    zIndex: 1002,
+                  }}
+                >
+                  {panelOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      onPress={() => {
+                        LayoutAnimation.easeInEaseOut();
+                        setSelectedPanelId(option.value);
+                        setIsPanelDropdownOpen(false);
+                      }}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        borderBottomWidth: option !== panelOptions[panelOptions.length - 1] ? 1 : 0,
+                        borderBottomColor: colors.border,
+                      }}
+                    >
+                      {selectedPanelId === option.value ? (
+                        <Check size={16} color={colors.success} />
+                      ) : (
+                        <View
+                          style={{
+                            width: 16,
+                            height: 16,
+                            borderRadius: 8,
+                            borderWidth: 2,
+                            borderColor: colors.borderDark,
+                          }}
+                        />
+                      )}
+                      <Text
+                        style={{
+                          marginLeft: 10,
+                          color: colors.textPrimary,
+                          fontSize: 13,
+                          fontWeight: selectedPanelId === option.value ? "600" : "400",
+                        }}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+        </View>
 
         {/* Voltage Gauge - Live Data */}
         {isLoading ? (
@@ -398,6 +656,7 @@ export default function Dashboard() {
         </Text>
 
         {!isLoading && !error && (
+          console.log("battery",battery),
           <IndustrialBattery
             percentage={Math.round(battery)}
             isCharging={generation > 0}
@@ -423,23 +682,10 @@ export default function Dashboard() {
         {!isLoading && !error && (
           <>
             <IndustrialStatusPanel
-              label="Inverter Temperature"
-              value={`${temp.toFixed(1)}°C`}
+              label="Cooling Status"
+              value={`${telemetry?.coolingStatus ? "OFF" : "ON"}`}
               icon={Thermometer}
-              severity={
-                temp >= 50 ? "critical" : temp >= 45 ? "warning" : "ok"
-              }
-            />
-
-            <IndustrialStatusPanel
-              label="Grid Supply Status"
-              value={
-                voltage < 200 || voltage > 250 ? "OUT OF RANGE" : "STABLE"
-              }
-              icon={Zap}
-              severity={
-                voltage < 200 || voltage > 250 ? "critical" : "ok"
-              }
+              severity={telemetry?.coolingStatus ? "ok" : "critical"}
             />
 
             
@@ -497,6 +743,92 @@ export default function Dashboard() {
             {telemetry && `\nDevice: ${telemetry.deviceId || 'N/A'}`}
             {telemetry && `\nLocation: ${telemetry.location || 'N/A'}`}
           </Text>
+        </View>
+
+        {/* Cleaner Robot Motor Control Button */}
+        <View
+          style={{
+            marginTop: 16,
+            marginBottom: 20,
+          }}
+        >
+          <TouchableOpacity
+            onPress={async () => {
+              const newStatus = motorStatus === 'ON' ? 'OFF' : 'ON';
+              try {
+                // Reset auto-activation tracking when manually controlling
+                lastAutoActivationRef.current = null;
+                
+                const result = await controlMotorMutation.mutateAsync({
+                  robotId: 'CLEANER-01',
+                  motorStatus: newStatus
+                });
+                if (result?.success) {
+                  setMotorStatus(newStatus);
+                }
+              } catch (error) {
+                console.error('Error controlling motor:', error);
+                // Error handling - could show alert here
+              }
+            }}
+            disabled={controlMotorMutation.isPending}
+            style={{
+              backgroundColor: motorStatus === 'ON' ? colors.success : colors.surfaceSecondary,
+              paddingVertical: 16,
+              paddingHorizontal: 24,
+              borderRadius: 12,
+              borderWidth: 2,
+              borderColor: motorStatus === 'ON' ? colors.success : colors.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              opacity: controlMotorMutation.isPending ? 0.6 : 1,
+            }}
+          >
+            {controlMotorMutation.isPending ? (
+              <ActivityIndicator 
+                size="small" 
+                color={motorStatus === 'ON' ? '#fff' : colors.success} 
+                style={{ marginRight: 8 }}
+              />
+            ) : (
+              <Power
+                size={20}
+                color={motorStatus === 'ON' ? '#fff' : colors.success}
+                style={{ marginRight: 8 }}
+              />
+            )}
+            <Text
+              style={{
+                color: motorStatus === 'ON' ? '#fff' : colors.textPrimary,
+                fontSize: 16,
+                fontWeight: "700",
+                textTransform: "uppercase",
+                letterSpacing: 1,
+              }}
+            >
+              {controlMotorMutation.isPending 
+                ? 'Processing...' 
+                : motorStatus === 'ON' 
+                  ? 'Turn Motor OFF' 
+                  : 'Turn Motor ON'
+              }
+            </Text>
+          </TouchableOpacity>
+          
+          {motorStatus === 'ON' && (
+            <Text
+              style={{
+                color: colors.success,
+                fontSize: 12,
+                textAlign: "center",
+                marginTop: 8,
+                fontWeight: "600",
+              }}
+            >
+              Motor is currently ON
+            </Text>
+          )}
         </View>
       </ScrollView>
 
