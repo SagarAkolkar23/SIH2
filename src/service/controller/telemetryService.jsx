@@ -52,7 +52,7 @@ export const useLiveTelemetry = ({
   deviceId, 
   location, 
   enabled = true,
-  refetchInterval = 3900 // 3.9 seconds (3900ms)
+  refetchInterval = 1000 // 3.9 seconds (3900ms)
 } = {}) => {
   return useCustomQuery({
     queryKey: [...TELEMETRY_KEYS.live, deviceId, location],

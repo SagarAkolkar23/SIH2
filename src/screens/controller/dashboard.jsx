@@ -68,8 +68,7 @@ export default function Dashboard() {
 
   // Extract telemetry data
   const telemetry = telemetryResponse?.data?.generation;
-  console.log("telemetry and my change ",telemetry);
-  
+  console.log(telemetry)
   // Get all panels from telemetry data
   const panels = telemetry?.panels || [];
   
@@ -105,7 +104,6 @@ export default function Dashboard() {
         lastAutoActivationRef.current !== lowEfficiencyKey &&
         (panel1 || panel2)) { // Only if we have panel data
       
-      console.log(`[AUTO MOTOR] Activating motor due to low efficiency - Panel-1: ${panel1Efficiency.toFixed(1)}%, Panel-2: ${panel2Efficiency.toFixed(1)}%`);
       lastAutoActivationRef.current = lowEfficiencyKey;
       
       controlMotorMutation.mutate(
@@ -117,11 +115,9 @@ export default function Dashboard() {
           onSuccess: (result) => {
             if (result?.success) {
               setMotorStatus('ON');
-              console.log('[AUTO MOTOR] ✅ Motor activated successfully due to low panel efficiency');
             }
           },
-          onError: (error) => {
-            console.error('[AUTO MOTOR] ❌ Error auto-activating motor:', error);
+          onError: () => {
             // Reset ref on error so we can retry
             lastAutoActivationRef.current = null;
           }
@@ -204,7 +200,7 @@ export default function Dashboard() {
   }
   const generation = telemetry?.generation ?? 0; // kW
   const consumption = telemetry?.consumption ?? 0; // kW
-  const battery = telemetry?.rawPayload?.batterySOH || 0;
+  const battery = telemetry?.rawPayload?.batterySOC || 0;
   const temp = telemetry?.temperature ?? 0;
   const inverterStatus = telemetry?.inverterStatus ?? 'OFF';
   const coolingStatus = telemetry?.coolingStatus ?? false;
@@ -233,7 +229,7 @@ export default function Dashboard() {
   const systemStatus = (() => {
     if (!telemetry) return "CONNECTING";
     //if (inverterStatus === 'FAULT') return "FAULT";
-    if (voltage < 6 || voltage > 18) return "FAULT";
+    if (voltage < 6 || voltage > 30) return "FAULT";
     if (temp >= 70) return "OVERHEAT";
     if (battery < 20) return "LOW BATTERY";
     return "OPERATIONAL";
@@ -614,14 +610,14 @@ export default function Dashboard() {
         ) : (
           <IndustrialGauge
             value={voltage}
-            max={18} 
+            max={35} 
             label="Grid Voltage"
             unit="V"
             icon={Zap}
             lowWarning={3}
-            highWarning={15}
+            highWarning={25}
             greenZoneStart={5}
-            greenZoneEnd={14}
+            greenZoneEnd={25}
           />
         )}
 
@@ -656,7 +652,6 @@ export default function Dashboard() {
         </Text>
 
         {!isLoading && !error && (
-          console.log("battery",battery),
           <IndustrialBattery
             percentage={Math.round(battery)}
             isCharging={generation > 0}
@@ -759,15 +754,26 @@ export default function Dashboard() {
                 // Reset auto-activation tracking when manually controlling
                 lastAutoActivationRef.current = null;
                 
+                // Call motor control API
+                // Backend automatically sets isActive=true when motorStatus='ON'
+                // ESP32 checks both motorStatus='ON' AND isActive=true before turning motor on
                 const result = await controlMotorMutation.mutateAsync({
                   robotId: 'CLEANER-01',
-                  motorStatus: newStatus
+                  motorStatus: newStatus,
+                  isActive: (newStatus === 'ON') ? true : false
                 });
+                
                 if (result?.success) {
                   setMotorStatus(newStatus);
+                  // Backend response includes isActive status
+                  // ESP32 will poll and check both motorStatus and isActive
+                  console.log('Motor control successful:', {
+                    motorStatus: result.data?.motorStatus,
+                    isActive: result.data?.isActive
+                  });
                 }
               } catch (error) {
-                console.error('Error controlling motor:', error);
+                console.error('Motor control error:', error);
                 // Error handling - could show alert here
               }
             }}

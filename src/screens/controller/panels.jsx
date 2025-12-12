@@ -47,6 +47,9 @@ export default function Panels() {
   
   const deviceId = telemetryResponse?.data?.generation?.deviceId;
   const location = telemetryResponse?.data?.generation?.location;
+  
+  // Get all panel IDs from live telemetry (to ensure we have complete list)
+  const panelsFromLiveTelemetry = telemetryResponse?.data?.generation?.panels || [];
 
   // Calculate date range from filter
   // If no filter, fetch last 24 hours to get recent data (will be limited to 10 rows client-side)
@@ -116,6 +119,80 @@ export default function Panels() {
     enabled: !!(deviceId || location)
   });
 
+  // Get all unique panel IDs (excluding PANEL-TOTAL) and sort them
+  // First try to get from live telemetry (most complete), then fallback to historical data
+  // Accepts any panel ID format (e.g., "2501", "2502", "PANEL-1", etc.)
+  const allPanelIds = useMemo(() => {
+    const panelIdSet = new Set();
+    
+    // First, get panels from live telemetry (most reliable source for all panels)
+    if (panelsFromLiveTelemetry && Array.isArray(panelsFromLiveTelemetry)) {
+      panelsFromLiveTelemetry.forEach(panel => {
+        const panelId = panel.panelId ? String(panel.panelId) : null;
+        // Accept any panel ID except PANEL-TOTAL (case-insensitive)
+        if (panelId && panelId.toUpperCase() !== 'PANEL-TOTAL') {
+          panelIdSet.add(panelId);
+        }
+      });
+    }
+    
+    // Also collect from historical data (in case some panels are missing from live telemetry)
+    if (generationDataResponse?.data?.generation) {
+      const generationRecords = Array.isArray(generationDataResponse.data.generation) 
+        ? generationDataResponse.data.generation 
+        : [];
+
+      generationRecords.forEach(record => {
+        if (record.panels && Array.isArray(record.panels)) {
+          record.panels.forEach(panel => {
+            const panelId = panel.panelId ? String(panel.panelId) : null;
+            // Collect all panel IDs except PANEL-TOTAL (case-insensitive)
+            if (panelId && panelId.toUpperCase() !== 'PANEL-TOTAL') {
+              panelIdSet.add(panelId);
+            }
+          });
+        }
+      });
+    }
+
+    // Sort panels intelligently:
+    // 1. Numeric panels first (2501, 2502, etc.) - sorted numerically
+    // 2. PANEL-* format panels (PANEL-1, PANEL-2, etc.) - sorted by number
+    // 3. Other panels alphabetically
+    return Array.from(panelIdSet).sort((a, b) => {
+      // Check if both are pure numbers
+      const numA = parseInt(a);
+      const numB = parseInt(b);
+      const isNumA = !isNaN(numA) && /^\d+$/.test(a);
+      const isNumB = !isNaN(numB) && /^\d+$/.test(b);
+      
+      if (isNumA && isNumB) {
+        // Both are numeric - sort numerically
+        return numA - numB;
+      }
+      
+      // Check if both are PANEL-* format
+      const panelMatchA = a.match(/^PANEL-(\d+)$/i);
+      const panelMatchB = b.match(/^PANEL-(\d+)$/i);
+      
+      if (panelMatchA && panelMatchB) {
+        // Both are PANEL-* format - sort by number
+        return parseInt(panelMatchA[1]) - parseInt(panelMatchB[1]);
+      }
+      
+      // If one is numeric and other is not, numeric comes first
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      
+      // If one is PANEL-* and other is not, PANEL-* comes after numeric but before others
+      if (panelMatchA) return -1;
+      if (panelMatchB) return 1;
+      
+      // Both are other formats - sort alphabetically
+      return a.localeCompare(b);
+    });
+  }, [generationDataResponse, panelsFromLiveTelemetry]);
+
   // Group panel data by timestamp (one row per timestamp with all panels)
   const panelData = useMemo(() => {
     if (!generationDataResponse?.data?.generation) return [];
@@ -130,6 +207,28 @@ export default function Panels() {
         const timestamp = new Date(record.timestamp).getTime();
         
         if (!groupedByTimestamp.has(timestamp)) {
+          // Initialize with all known panels (set to zero if not present in this record)
+          const initialPanels = {};
+          
+          // Initialize all individual panels with zero values
+          allPanelIds.forEach(panelId => {
+            initialPanels[panelId] = {
+              voltage: 0,
+              current: 0,
+              generation: 0,
+              ratio: null
+            };
+          });
+          
+          // Initialize PANEL-TOTAL with zero values
+          // Use uppercase 'PANEL-TOTAL' as the standard key
+          initialPanels['PANEL-TOTAL'] = {
+            voltage: 0,
+            current: 0,
+            generation: 0,
+            ratio: null
+          };
+          
           groupedByTimestamp.set(timestamp, {
             timestamp: record.timestamp,
             date: new Date(record.timestamp).toLocaleDateString(),
@@ -137,18 +236,23 @@ export default function Panels() {
             recordId: record._id,
             deviceId: record.deviceId,
             location: record.location,
-            panels: {}
+            panels: initialPanels
           });
         }
         
         const groupedRecord = groupedByTimestamp.get(timestamp);
         
-        // Organize panels by panelId (normalize to uppercase for consistency)
+        // Organize panels by panelId (preserve original case for display)
+        // This will overwrite zero values with actual data if present
         record.panels.forEach(panel => {
-          const panelId = panel.panelId ? String(panel.panelId).toUpperCase() : null;
-          // Only include panels that match our expected format
-          if (panelId && (panelId.startsWith('PANEL-') || panelId === 'PANEL-TOTAL')) {
-            groupedRecord.panels[panelId] = {
+          const panelId = panel.panelId ? String(panel.panelId) : null;
+          // Include all panels (any format)
+          if (panelId) {
+            // Normalize PANEL-TOTAL to uppercase for consistency
+            const normalizedPanelId = panelId.toUpperCase() === 'PANEL-TOTAL' ? 'PANEL-TOTAL' : panelId;
+            
+            // Use normalized key for PANEL-TOTAL, original case for others
+            groupedRecord.panels[normalizedPanelId] = {
               voltage: panel.voltage || 0,
               current: panel.current || 0,
               generation: panel.generation || 0,
@@ -162,7 +266,7 @@ export default function Panels() {
     // Convert map to array and sort by timestamp descending (newest first)
     return Array.from(groupedByTimestamp.values())
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  }, [generationDataResponse]);
+  }, [generationDataResponse, allPanelIds]);
 
   // Calculate efficiency for sorting (based on Panel-TOTAL efficiency)
   const INDIVIDUAL_PANEL_CAPACITY = 18;
@@ -412,7 +516,7 @@ export default function Panels() {
                   borderWidth: 1,
                   borderColor: colors.border,
                   overflow: "hidden",
-                  minWidth: Platform.OS === 'web' ? '100%' : 700, // Minimum width for table (2 columns per panel: Voltage + Efficiency)
+                  minWidth: Platform.OS === 'web' ? '100%' : Math.max(700, 140 + (allPanelIds.length + 1) * 120), // Dynamic width based on number of panels
                 }}
               >
                 {/* Table Header */}
@@ -430,35 +534,22 @@ export default function Panels() {
                     Timestamp
                   </Text>
                   
-                  {/* Panel-1 Columns */}
-                  <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border, paddingLeft: 8 }}>
-                    <Text style={[styles.headerText, { color: colors.textPrimary, marginBottom: 4 }]}>
-                      Panel-1
-                    </Text>
-                    <View style={{ flexDirection: "row" }}>
-                      <Text style={[styles.headerText, { flex: 1, fontSize: 10, color: colors.textTertiary }]}>
-                        Voltage (V)
+                  {/* Dynamic Panel Columns */}
+                  {allPanelIds.map((panelId) => (
+                    <View key={panelId} style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border, paddingLeft: 8 }}>
+                      <Text style={[styles.headerText, { color: colors.textPrimary, marginBottom: 4 }]}>
+                        {panelId}
                       </Text>
-                      <Text style={[styles.headerText, { flex: 1, fontSize: 10, color: colors.textTertiary }]}>
-                        Efficiency (%)
-                      </Text>
+                      <View style={{ flexDirection: "row" }}>
+                        <Text style={[styles.headerText, { flex: 1, fontSize: 10, color: colors.textTertiary }]}>
+                          Voltage (V)
+                        </Text>
+                        <Text style={[styles.headerText, { flex: 1, fontSize: 10, color: colors.textTertiary }]}>
+                          Efficiency (%)
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                  
-                  {/* Panel-2 Columns */}
-                  <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border, paddingLeft: 8 }}>
-                    <Text style={[styles.headerText, { color: colors.textPrimary, marginBottom: 4 }]}>
-                      Panel-2
-                    </Text>
-                    <View style={{ flexDirection: "row" }}>
-                      <Text style={[styles.headerText, { flex: 1, fontSize: 10, color: colors.textTertiary }]}>
-                        Voltage (V)
-                      </Text>
-                      <Text style={[styles.headerText, { flex: 1, fontSize: 10, color: colors.textTertiary }]}>
-                        Efficiency (%)
-                      </Text>
-                    </View>
-                  </View>
+                  ))}
                   
                   {/* Panel-TOTAL Columns */}
                   <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border, paddingLeft: 8 }}>
@@ -478,15 +569,10 @@ export default function Panels() {
 
               {/* Table Rows */}
               {currentPageData.map((record, index) => {
-                // Panel IDs are normalized to uppercase in data processing
-                const panel1 = record.panels['PANEL-1'] || null;
-                const panel2 = record.panels['PANEL-2'] || null;
-                const panelTotal = record.panels['PANEL-TOTAL'] || null;
-                
                 // Calculate efficiency based on panel type
-                // Individual panels: 18V capacity, Panel-TOTAL: 36V capacity
-                const INDIVIDUAL_PANEL_CAPACITY = 15; // 18V per individual panel
-                const TOTAL_PANEL_CAPACITY = 30; // 36V for Panel-TOTAL (sum of 2 panels)
+                // Individual panels: 15V capacity, Panel-TOTAL: 30V capacity
+                const INDIVIDUAL_PANEL_CAPACITY = 15; // 15V per individual panel
+                const TOTAL_PANEL_CAPACITY = 30; // 30V for Panel-TOTAL
                 
                 const calculateEfficiency = (voltage, isTotalPanel = false) => {
                   if (!voltage || voltage <= 0) return 0;
@@ -507,39 +593,43 @@ export default function Panels() {
                 };
                 
                 const renderPanelData = (panel, isTotalPanel = false) => {
-                  if (!panel) {
-                    return (
-                      <>
-                        <Text style={[styles.cellText, { flex: 1, color: colors.textTertiary }]}>-</Text>
-                        <Text style={[styles.cellText, { flex: 1, color: colors.textTertiary }]}>-</Text>
-                      </>
-                    );
-                  }
-                  
-                  const voltage = panel.voltage || 0;
+                  // Always show data, even if panel is null or has zero values
+                  const voltage = panel?.voltage || 0;
                   const efficiency = calculateEfficiency(voltage, isTotalPanel);
                   const efficiencyColor = getEfficiencyColor(efficiency);
                   
+                  // Use a lighter background color for zero values
+                  const backgroundColor = voltage === 0 ? colors.surfaceSecondary : efficiencyColor;
+                  const textColor = voltage === 0 ? colors.textTertiary : '#000';
+                  
                   return (
                     <>
-                      <Text style={[styles.cellText, { flex: 1, color: colors.textPrimary }]}>
+                      <Text style={[styles.cellText, { flex: 1, color: voltage === 0 ? colors.textTertiary : colors.textPrimary }]}>
                         {voltage.toFixed(2)}
                       </Text>
                       <View style={{ 
                         flex: 1, 
-                        backgroundColor: efficiencyColor, 
+                        backgroundColor: backgroundColor, 
                         paddingVertical: 4, 
                         paddingHorizontal: 8, 
                         borderRadius: 4,
                         alignItems: 'center',
+                        borderWidth: voltage === 0 ? 1 : 0,
+                        borderColor: colors.border,
                       }}>
-                        <Text style={[styles.cellText, { color: '#000', fontWeight: '600' }]}>
+                        <Text style={[styles.cellText, { color: textColor, fontWeight: '600' }]}>
                           {efficiency.toFixed(1)}%
                         </Text>
                       </View>
                     </>
                   );
                 };
+                
+                // Get PANEL-TOTAL (case-insensitive lookup)
+                const panelTotalKey = Object.keys(record.panels || {}).find(
+                  key => key.toUpperCase() === 'PANEL-TOTAL'
+                );
+                const panelTotal = panelTotalKey ? record.panels[panelTotalKey] : null;
                 
                 return (
                   <View
@@ -563,19 +653,33 @@ export default function Panels() {
                       </Text>
                     </View>
                     
-                    {/* Panel-1 Data */}
-                    <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border, paddingLeft: 8, flexDirection: "row" }}>
-                      {renderPanelData(panel1, false)}
-                    </View>
-                    
-                    {/* Panel-2 Data */}
-                    <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border, paddingLeft: 8, flexDirection: "row" }}>
-                      {renderPanelData(panel2, false)}
-                    </View>
+                    {/* Dynamic Panel Data - Show all panels even with zero values */}
+                    {allPanelIds.map((panelId) => {
+                      // Get panel data (will have zero values if not present in record)
+                      const panel = record.panels[panelId] || {
+                        voltage: 0,
+                        current: 0,
+                        generation: 0,
+                        ratio: null
+                      };
+                      return (
+                        <View 
+                          key={panelId}
+                          style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border, paddingLeft: 8, flexDirection: "row" }}
+                        >
+                          {renderPanelData(panel, false)}
+                        </View>
+                      );
+                    })}
                     
                     {/* Panel-TOTAL Data */}
                     <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border, paddingLeft: 8, flexDirection: "row" }}>
-                      {renderPanelData(panelTotal, true)}
+                      {renderPanelData(panelTotal || {
+                        voltage: 0,
+                        current: 0,
+                        generation: 0,
+                        ratio: null
+                      }, true)}
                     </View>
                   </View>
                 );

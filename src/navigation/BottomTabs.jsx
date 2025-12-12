@@ -34,7 +34,7 @@ export default function ControllerBottomTabs() {
             return <BarChart2 size={size} color={color} />;
           if (route.name === "Notifications")
             return <Bell size={size} color={color} />;
-          if (route.name === "Alerts")
+          if (route.name === "LMS")
             return <AlertTriangle size={size} color={color} />;
           if (route.name === "Panels")
             return <Sun size={size} color={color} />;

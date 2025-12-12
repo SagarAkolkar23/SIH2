@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ---- BASE URL ----
 let API_BASE_URL =
-  Constants.expoConfig?.extra?.API_URL || "http://10.76.66.99:5000";
+  Constants.expoConfig?.extra?.API_URL || "http://10.71.102.99:5000";
 
 // Remove trailing slash if present
 API_BASE_URL = API_BASE_URL.replace(/\/$/, "");
@@ -44,6 +44,15 @@ api.interceptors.response.use(
     return res;
   },
   async (err) => {
+    // Handle ERR_NETWORK (generic Axios network error - no response received)
+    if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+      const networkError = new Error('Network Error: Cannot connect to server. Please ensure the backend server is running at ' + API_BASE_URL + ' and your device is on the same network.');
+      networkError.isNetworkError = true;
+      networkError.code = err.code || 'ERR_NETWORK';
+      networkError.originalError = err;
+      return Promise.reject(networkError);
+    }
+    
     // Handle network errors gracefully (connection timeout, network unavailable, etc.)
     if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT' || err.message?.includes('timeout')) {
       // Network timeout - don't crash the app, just reject with a user-friendly error
@@ -67,6 +76,15 @@ api.interceptors.response.use(
       socketError.isNetworkError = true;
       socketError.code = 'SOCKET_TIMEOUT';
       return Promise.reject(socketError);
+    }
+    
+    // Handle errors without response (network issues)
+    if (!err.response) {
+      const noResponseError = new Error('Network request failed. Please check your connection and ensure the backend server is running at ' + API_BASE_URL);
+      noResponseError.isNetworkError = true;
+      noResponseError.code = err.code || 'NO_RESPONSE';
+      noResponseError.originalError = err;
+      return Promise.reject(noResponseError);
     }
     
     if (err.response?.status === 401) {
@@ -144,20 +162,34 @@ export const useCustomQuery = (options) => {
         throw new Error(`Malformed request URL: ${requestUrl}`);
       }
       
-      try {
-        // Create validated config with proper URL
-        const validatedConfig = {
-          method: requestConfig.method || 'GET',
-          url: urlPath,
-          ...(requestConfig.params && { params: requestConfig.params }),
-          ...(requestConfig.data && { data: requestConfig.data }),
-          ...(requestConfig.headers && { headers: requestConfig.headers })
-        };
+      // Create validated config with proper URL
+      const validatedConfig = {
+        method: requestConfig.method || 'GET',
+        url: urlPath,
+        ...(requestConfig.params && { params: requestConfig.params }),
+        ...(requestConfig.data && { data: requestConfig.data }),
+        ...(requestConfig.headers && { headers: requestConfig.headers })
+      };
 
+      try {
         const res = await api(validatedConfig);
-        
         return res.data;
       } catch (error) {
+        const errorDetails = {
+          url: validatedConfig.url,
+          fullUrl: requestUrl,
+          method: validatedConfig.method,
+          error: error.message,
+          errorCode: error.code,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          responseData: error.response?.data,
+          isNetworkError: error.isNetworkError,
+          hasResponse: !!error.response,
+          baseURL: api.defaults.baseURL,
+          timestamp: new Date().toISOString()
+        };
+        
         throw error;
       }
     },

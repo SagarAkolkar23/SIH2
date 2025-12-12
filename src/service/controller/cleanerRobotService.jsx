@@ -11,23 +11,27 @@ import { api } from '../../api/useQuery';
  * POST /api/cleaner-robot/motor-control
  * @param {string} robotId - Robot ID (default: 'CLEANER-01')
  * @param {string} motorStatus - 'ON' or 'OFF'
+ * Note: Backend automatically sets isActive=true when motorStatus='ON'
+ * ESP32 checks both motorStatus='ON' AND isActive=true before turning motor on
  */
 export const useControlCleanerMotor = () => {
   return useMutation({
-    mutationFn: async ({ robotId = 'CLEANER-01', motorStatus }) => {
+    mutationFn: async ({ robotId = 'CLEANER-01', motorStatus, isActive }) => {
       if (!motorStatus || !['ON', 'OFF'].includes(motorStatus)) {
         throw new Error('motorStatus must be "ON" or "OFF"');
       }
-      
+
       const response = await api.post('/api/cleaner-robot/motor-control', {
         robotId,
-        motorStatus
+        motorStatus,
+        isActive,
       });
-      
+
       return response.data;
     },
   });
 };
+
 
 /**
  * Get cleaner robot status
